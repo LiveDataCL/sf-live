@@ -127,6 +127,54 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 @keyframes skel{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .toast{position:fixed;bottom:22px;right:22px;background:var(--text);color:#fff;padding:10px 17px;border-radius:var(--rl);font-size:13px;z-index:9000;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none}
 .toast.on{opacity:1;transform:translateY(0)}
+
+/* ── ANÁLISIS: CARDS SUPERIORES + HEATMAPS ─────────────────────────────── */
+.analisis-wrap{margin-bottom:18px}
+.top-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.top-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;position:relative}
+.top-card-accent{height:3px;width:100%}
+.top-card-body{padding:14px 16px}
+.top-card-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);margin-bottom:6px;display:flex;align-items:center;gap:5px}
+.top-card-label .medal{font-size:14px}
+.top-card-val{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--text);line-height:1.1}
+.top-card-sub{font-size:11px;color:var(--text3);margin-top:4px;line-height:1.5}
+.top-card-tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;font-family:var(--mono);margin-top:6px}
+
+/* Heatmaps */
+.heat-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.heat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:14px 16px}
+.heat-title{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.09em;margin-bottom:4px}
+.heat-subtitle{font-size:10px;color:var(--text3);margin-bottom:12px}
+.heat-legend{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text3);margin-bottom:10px}
+.heat-legend-bar{display:flex;gap:2px}
+.heat-legend-cell{width:12px;height:8px;border-radius:2px}
+
+/* Heatmap barras horizontales (hora) */
+.heat-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.heat-row-lbl{font-family:var(--mono);font-size:10px;color:var(--text3);min-width:34px;text-align:right;flex-shrink:0}
+.heat-row-bar{flex:1;height:16px;background:var(--surface2);border-radius:3px;overflow:hidden;position:relative}
+.heat-row-fill{height:100%;border-radius:3px;transition:width .5s ease}
+.heat-row-val{font-family:var(--mono);font-size:10px;font-weight:600;min-width:22px;text-align:right;flex-shrink:0}
+
+/* Heatmap días (celdas) */
+.heat-dias{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.heat-dia-cell{border-radius:5px;padding:8px 4px;text-align:center;transition:transform .15s;cursor:default}
+.heat-dia-cell:hover{transform:scale(1.06)}
+.heat-dia-name{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px}
+.heat-dia-val{font-family:var(--mono);font-size:13px;font-weight:700}
+.heat-dia-sub{font-size:9px;margin-top:2px;opacity:.75}
+
+/* Colores de calor */
+.h0{background:#f5f4f0;color:#9c9a93}
+.h1{background:#dcedc8;color:#33691e}
+.h2{background:#fff9c4;color:#f57f17}
+.h3{background:#ffe0b2;color:#e65100}
+.h4{background:#ff8a65;color:#fff}
+
+@media(max-width:700px){
+  .top-cards{grid-template-columns:1fr}
+  .heat-grid{grid-template-columns:1fr}
+}
 @media(max-width:800px){
   .bb-grid{grid-template-columns:repeat(2,1fr)}
   .charts-grid{grid-template-columns:1fr}
@@ -173,7 +221,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   <div class="fecha-bar">
     <button class="btn-hoy on" id="btnPeriodoHoy"   onclick="selPeriodoSocios('hoy',this)">Hoy</button>
     <button class="btn-hoy"    id="btnPeriodo7"      onclick="selPeriodoSocios('semana',this)">Esta semana</button>
-    <button class="btn-hoy"    id="btnPeriodo30"     onclick="selPeriodoSocios('30',this)">Últ. 30 días</button>
     <button class="btn-hoy"    id="btnPeriodoMes"    onclick="selPeriodoSocios('mes',this)">Este mes</button>
     <button class="btn-hoy"    id="btnPeriodoCustom" onclick="selPeriodoSocios('custom',this)">Personalizado</button>
     <div id="socios-panel-hoy" style="display:flex;gap:6px;align-items:center">
@@ -224,8 +271,14 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       </div>
     </div>
   </div>
-  <!-- BANNER SEMANA (visible solo en modo "Esta semana") -->
-  <div id="bannerSemana" style="display:none;background:linear-gradient(135deg,var(--surface) 0%,var(--surface2) 100%);border:1px solid var(--border);border-radius:10px;padding:14px 20px;margin-bottom:18px"></div>
+  <!-- BANNER PERÍODO (siempre visible al cargar datos) -->
+  <div id="bannerPeriodo" style="display:none;background:linear-gradient(135deg,var(--surface) 0%,var(--surface2) 100%);border:1px solid var(--border);border-radius:10px;padding:14px 20px;margin-bottom:14px"></div>
+
+  <!-- ANÁLISIS: CARDS SUPERIORES + HEATMAPS -->
+  <div class="analisis-wrap" id="analisisWrap" style="display:none">
+    <div class="top-cards" id="topCards"></div>
+    <div class="heat-grid" id="heatGrid"></div>
+  </div>
 
   <!-- KPIs -->
   <div class="kpi-grid" id="kpiGrid">
@@ -277,6 +330,334 @@ var INTERVALO  = 60;
 var timer      = null;
 var countdown  = INTERVALO;
 var fechaSel   = '';
+// BLOQUE DE NUEVAS FUNCIONES — se insertará en el JS del sf-live
+
+// ─── CARGA DE REGISTROS DETALLADOS (para heatmaps) ───────────────────────────
+function cargarRegistrosDetalle(dias, callback){
+  var promesas = dias.map(function(f){
+    return fetch(API_URL + '/registros/dia?fecha=' + f)
+      .then(function(r){ return r.json(); })
+      .catch(function(){ return {ok:false, registros:[]}; });
+  });
+  Promise.all(promesas).then(function(results){
+    var todos = [];
+    results.forEach(function(json){
+      if(json.ok && json.registros) todos = todos.concat(json.registros);
+    });
+    callback(todos);
+  });
+}
+
+// ─── PROCESAR REGISTROS → MÉTRICAS PARA HEATMAPS ─────────────────────────────
+function procesarRegistros(registros){
+  var HORAS = [10,11,12,13,14,15,16,17,18,19,20];
+  var DIAS_NOM = ['Lun','Mar','Mié','Jue','Vie','Sáb'];
+  // dow 1=lun,2=mar,...,6=sáb → índice 0..5
+  var porHora = {}, porDia = {}, porFecha = {}, mejorBarbero = {};
+
+  HORAS.forEach(function(h){ porHora[h] = {cnt:0, fact:0}; });
+  for(var i=0;i<6;i++) porDia[i] = {cnt:0, fact:0, nom: DIAS_NOM[i]};
+
+  registros.forEach(function(r){
+    var hora = r.hora ? parseInt(r.hora.split(':')[0]) : -1;
+    var fact = (r.precio || 0);
+    var bb   = (r.bb || 0) + (r.propina || 0);
+    var barb = r.bnom || r.barbero || '?';
+
+    // Por hora
+    if(hora >= 10 && hora <= 20){
+      if(!porHora[hora]) porHora[hora] = {cnt:0, fact:0};
+      porHora[hora].cnt++;
+      porHora[hora].fact += fact;
+    }
+
+    // Por día de semana — usar fecha del registro
+    var fechaStr = r.fecha || '';
+    // fecha puede venir como "DD/MM/YYYY" (sistema tickets) o "YYYY-MM-DD"
+    var d;
+    if(fechaStr.includes('-')){
+      d = new Date(fechaStr + 'T12:00:00');
+    } else if(fechaStr.includes('/')){
+      var pts = fechaStr.split('/');
+      d = new Date(pts[2]+'-'+pts[1]+'-'+pts[0]+'T12:00:00');
+    }
+    if(d && !isNaN(d)){
+      var dow = d.getDay(); // 0=dom,1=lun,...,6=sáb
+      var idx = (dow === 0) ? -1 : dow - 1; // lun=0,...,sáb=5, dom=-1
+      if(idx >= 0 && idx < 6){
+        porDia[idx].cnt  += 1;
+        porDia[idx].fact += fact;
+        // Por fecha (para mejor día)
+        var key = fechaStr.includes('-') ? fechaStr : pts[2]+'-'+pts[1]+'-'+pts[0];
+        if(!porFecha[key]) porFecha[key] = {cnt:0, fact:0, fecha:key};
+        porFecha[key].cnt++;
+        porFecha[key].fact += fact;
+      }
+    }
+
+    // Por barbero
+    if(!mejorBarbero[barb]) mejorBarbero[barb] = {cnt:0, fact:0, bb:0};
+    mejorBarbero[barb].cnt++;
+    mejorBarbero[barb].fact += fact;
+    mejorBarbero[barb].bb   += bb;
+  });
+
+  // Mejor día
+  var dias = Object.values(porFecha).sort(function(a,b){ return b.fact - a.fact; });
+  var mejorDia = dias.length > 0 ? dias[0] : null;
+
+  // Mejor barbero por facturación
+  var barbs = Object.entries(mejorBarbero).sort(function(a,b){ return b[1].fact - a[1].fact; });
+  var topBarb = barbs.length > 0 ? {nom: barbs[0][0], ...barbs[0][1]} : null;
+
+  return { porHora: porHora, porDia: porDia, mejorDia: mejorDia, topBarb: topBarb, totalRegs: registros.length };
+}
+
+// ─── HELPERS HEATMAP ─────────────────────────────────────────────────────────
+function heatClass(pct){
+  if(pct === 0)    return 'h0';
+  if(pct < 0.25)   return 'h1';
+  if(pct < 0.55)   return 'h2';
+  if(pct < 0.80)   return 'h3';
+  return 'h4';
+}
+
+function formatFechaMejorDia(fechaStr){
+  if(!fechaStr) return '—';
+  var meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  var dias  = ['dom','lun','mar','mié','jue','vie','sáb'];
+  var d = new Date(fechaStr + 'T12:00:00');
+  if(isNaN(d)) return fechaStr;
+  return dias[d.getDay()] + ' ' + d.getDate() + ' ' + meses[d.getMonth()];
+}
+
+// ─── RENDER BANNER PERÍODO (reemplaza renderBannerSemana) ────────────────────
+function renderBannerPeriodo(data, desde, hasta, modo){
+  var el = document.getElementById('bannerPeriodo');
+  if(!el) return;
+
+  var fact   = data.facturacion || 0;
+  var svc    = data.servicios   || 0;
+  var tk     = svc > 0 ? Math.round(fact / svc) : 0;
+
+  // Meta y contexto según período
+  var META_MES = 6500000;
+  var meta, metaLabel, diasOp, diasTot, diasRest;
+
+  if(modo === 'hoy'){
+    meta      = Math.round(META_MES / 26); // meta diaria
+    metaLabel = 'meta del día';
+    diasOp    = 1; diasTot = 1; diasRest = 0;
+  } else if(modo === 'semana'){
+    meta      = Math.round(META_MES / 4.33);
+    metaLabel = 'meta semanal';
+    var hoyS  = new Date();
+    var dowS  = hoyS.getDay();
+    diasOp    = Math.min((dowS === 0 ? 6 : dowS - 1) + 1, 6);
+    diasTot   = 6;
+    diasRest  = Math.max(0, diasTot - diasOp);
+  } else if(modo === 'mes'){
+    meta      = META_MES;
+    metaLabel = 'meta mensual';
+    var ahora = new Date();
+    diasOp    = ahora.getDate();
+    diasTot   = new Date(ahora.getFullYear(), ahora.getMonth()+1, 0).getDate();
+    diasRest  = Math.max(0, diasTot - diasOp);
+  } else {
+    // personalizado: calcular días entre desde y hasta
+    var dD = new Date(desde+'T12:00:00'), dH = new Date(hasta+'T12:00:00');
+    diasOp   = Math.round((dH - dD) / 86400000) + 1;
+    diasTot  = diasOp; diasRest = 0;
+    meta     = Math.round(META_MES / 26 * diasOp);
+    metaLabel = 'meta estimada (' + diasOp + ' días)';
+  }
+
+  var pct   = meta > 0 ? Math.min(100, Math.round(fact / meta * 100)) : 0;
+  var color = pct >= 100 ? 'var(--ok)' : pct >= 70 ? 'var(--gold)' : 'var(--err)';
+
+  // Proyección al final del período
+  var factDia   = diasOp > 0 ? fact / diasOp : 0;
+  var proy      = Math.round(fact + factDia * diasRest);
+  var faltaMeta = Math.max(0, meta - fact);
+  var necesDia  = diasRest > 0 ? Math.round(faltaMeta / diasRest) : 0;
+
+  // Título dinámico
+  var meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  var titulo;
+  if(modo === 'hoy'){
+    var dh = new Date(); titulo = 'Hoy · ' + dh.getDate()+' '+meses[dh.getMonth()];
+  } else if(modo === 'semana'){
+    var dD2=new Date(desde+'T12:00:00'),dH2=new Date(hasta+'T12:00:00');
+    titulo = 'Esta semana · '+dD2.getDate()+' '+meses[dD2.getMonth()]+' → '+dH2.getDate()+' '+meses[dH2.getMonth()];
+  } else if(modo === 'mes'){
+    titulo = 'Este mes · '+meses[new Date().getMonth()]+' '+new Date().getFullYear();
+  } else {
+    var dD3=new Date(desde+'T12:00:00'),dH3=new Date(hasta+'T12:00:00');
+    titulo = dD3.getDate()+' '+meses[dD3.getMonth()]+' → '+dH3.getDate()+' '+meses[dH3.getMonth()];
+  }
+
+  // Barra de días solo para semana
+  var barDiasHTML = '';
+  if(modo === 'semana'){
+    var diasNom = ['Lun','Mar','Mié','Jue','Vie','Sáb'];
+    var dowHoy  = new Date().getDay();
+    var diaIdx  = (dowHoy === 0) ? 6 : dowHoy - 1;
+    barDiasHTML = '<div style="display:flex;gap:4px;margin-bottom:14px">'
+      + diasNom.map(function(d,i){
+          var activo = i <= diaIdx;
+          var esHoy  = i === diaIdx;
+          return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1">'
+            + '<div style="width:100%;height:6px;border-radius:3px;background:'+(activo?color:'var(--border)')
+            + ';'+(esHoy?'box-shadow:0 0 0 2px '+color+'40':'')+'"></div>'
+            + '<span style="font-size:9px;font-family:var(--mono);color:'
+            +(esHoy?color:'var(--text3)')+';font-weight:'+(esHoy?'700':'400')+'">'+ d +'</span>'
+            + '</div>';
+        }).join('')
+      + '</div>';
+  }
+
+  el.style.display = 'block';
+  el.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">'
+    + '<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold)">' + titulo + '</span>'
+    + '<span style="font-family:var(--mono);font-size:10px;color:var(--text3)">'
+    + diasOp + ' día'+(diasOp!==1?'s':'')+' operado'+(diasOp!==1?'s':'')
+    + (diasRest>0 ? ' · ' + diasRest + ' restante'+(diasRest!==1?'s':'') : '') + '</span>'
+    + '</div>'
+    + barDiasHTML
+    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">'
+    + kpiSem('Facturado', '$'+Math.round(fact/1000)+'K', 'var(--ok)')
+    + kpiSem('Servicios', svc.toLocaleString('es-CL'), 'var(--text)')
+    + kpiSem('Ticket prom.', '$'+tk.toLocaleString('es-CL'), 'var(--text)')
+    + kpiSem(diasRest>0?'Proyectado':'Total período', '$'+(Math.round(proy/1000))+'K', color)
+    + '</div>'
+    + '<div style="margin-bottom:6px;display:flex;justify-content:space-between;font-size:11px">'
+    + '<span style="color:var(--text2)">Avance vs '+metaLabel+' ($'+Math.round(meta/1000)+'K)</span>'
+    + '<span style="font-family:var(--mono);font-weight:700;color:'+color+'">'+pct+'%</span>'
+    + '</div>'
+    + '<div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:'+(necesDia>0?'8':'0')+'px">'
+    + '<div style="height:100%;width:'+pct+'%;background:'+color+';border-radius:4px;transition:width .6s"></div>'
+    + '</div>'
+    + (necesDia > 0
+        ? '<div style="font-size:11px;color:var(--text3)">Faltan <strong style="color:var(--text)">$'+faltaMeta.toLocaleString('es-CL')+'</strong>'
+          +' · necesitan <strong style="color:var(--text)">$'+necesDia.toLocaleString('es-CL')+'/día</strong></div>'
+        : '<div style="font-size:11px;color:var(--ok)">✓ Meta alcanzada</div>');
+}
+
+// ─── RENDER ANÁLISIS (cards superiores + heatmaps) ───────────────────────────
+function renderAnalisis(metricas){
+  var wrap = document.getElementById('analisisWrap');
+  if(!wrap) return;
+  if(!metricas || metricas.totalRegs === 0){ wrap.style.display='none'; return; }
+  wrap.style.display = 'block';
+
+  // ── CARDS SUPERIORES ────────────────────────────────────────────────────
+  var tc = document.getElementById('topCards');
+  if(tc){
+    var md = metricas.mejorDia;
+    var tb = metricas.topBarb;
+    var htmlCards = '';
+
+    // Card: Mejor día
+    if(md){
+      htmlCards += '<div class="top-card">'
+        + '<div class="top-card-accent" style="background:linear-gradient(90deg,#c9a84c,#e8c97a)"></div>'
+        + '<div class="top-card-body">'
+        + '<div class="top-card-label"><span class="medal">🏆</span>Mejor día del período</div>'
+        + '<div class="top-card-val">$'+Math.round(md.fact/1000)+'K</div>'
+        + '<div class="top-card-sub">'
+        + formatFechaMejorDia(md.fecha) + ' · '
+        + '<strong>'+md.cnt+'</strong> servicios · tkt $'+Math.round(md.fact/md.cnt).toLocaleString('es-CL')+'</div>'
+        + '<span class="top-card-tag" style="background:#fff9c4;color:#8b5e00">📅 Día récord</span>'
+        + '</div></div>';
+    }
+
+    // Card: Mejor barbero
+    if(tb){
+      htmlCards += '<div class="top-card">'
+        + '<div class="top-card-accent" style="background:linear-gradient(90deg,#1a6b3a,#4caf50)"></div>'
+        + '<div class="top-card-body">'
+        + '<div class="top-card-label"><span class="medal">✂️</span>Mejor barbero del período</div>'
+        + '<div class="top-card-val">'+tb.nom+'</div>'
+        + '<div class="top-card-sub">'
+        + '$'+Math.round(tb.fact/1000)+'K facturado · '
+        + '<strong>'+tb.cnt+'</strong> servicios · tkt $'+Math.round(tb.fact/tb.cnt).toLocaleString('es-CL')+'</div>'
+        + '<span class="top-card-tag" style="background:#e8f5e9;color:#1a6b3a">🔥 Top performer</span>'
+        + '</div></div>';
+    }
+
+    tc.innerHTML = htmlCards;
+  }
+
+  // ── HEATMAPS ────────────────────────────────────────────────────────────
+  var hg = document.getElementById('heatGrid');
+  if(!hg) return;
+
+  // Heatmap 1: Por hora del día
+  var porHora = metricas.porHora;
+  var HORAS = [10,11,12,13,14,15,16,17,18,19,20];
+  var maxHora = Math.max.apply(null, HORAS.map(function(h){ return (porHora[h]||{cnt:0}).cnt; }));
+
+  var horaRows = HORAS.map(function(h){
+    var d    = porHora[h] || {cnt:0, fact:0};
+    var pct  = maxHora > 0 ? d.cnt / maxHora : 0;
+    var cls  = heatClass(pct);
+    var wPct = Math.round(pct * 100);
+    var bg   = {h0:'#f5f4f0',h1:'#dcedc8',h2:'#fff9c4',h3:'#ffe0b2',h4:'#ff8a65'}[cls];
+    var lbl  = h + ':00';
+    return '<div class="heat-row">'
+      + '<span class="heat-row-lbl">'+lbl+'</span>'
+      + '<div class="heat-row-bar">'
+      + '<div class="heat-row-fill" style="width:'+wPct+'%;background:'+bg+'"></div>'
+      + '</div>'
+      + '<span class="heat-row-val" style="color:'+(pct>0.79?'#e65100':pct>0.54?'#bf360c':pct>0.24?'#f57f17':'var(--text3)')+'">'+d.cnt+'</span>'
+      + '</div>';
+  }).join('');
+
+  // Heatmap 2: Por día de semana
+  var porDia = metricas.porDia;
+  var maxDia = Math.max.apply(null, Object.values(porDia).map(function(d){ return d.cnt; }));
+
+  var diaCells = [0,1,2,3,4,5].map(function(i){
+    var d   = porDia[i] || {cnt:0, fact:0, nom:'?'};
+    var pct = maxDia > 0 ? d.cnt / maxDia : 0;
+    var cls = heatClass(pct);
+    var bg  = {h0:'#f5f4f0',h1:'#dcedc8',h2:'#fff9c4',h3:'#ffe0b2',h4:'#ff8a65'}[cls];
+    var fg  = {h0:'#9c9a93',h1:'#33691e',h2:'#f57f17',h3:'#e65100',h4:'#fff'}[cls];
+    var tk2 = d.cnt > 0 ? '$'+Math.round(d.fact/d.cnt/1000*10)/10+'K' : '—';
+    return '<div class="heat-dia-cell" style="background:'+bg+';color:'+fg+'">'
+      + '<div class="heat-dia-name">'+d.nom+'</div>'
+      + '<div class="heat-dia-val">'+d.cnt+'</div>'
+      + '<div class="heat-dia-sub">'+tk2+'</div>'
+      + '</div>';
+  }).join('');
+
+  // Leyenda de calor
+  var leyenda = '<div class="heat-legend">'
+    + '<span>Frío</span><div class="heat-legend-bar">'
+    + ['#f5f4f0','#dcedc8','#fff9c4','#ffe0b2','#ff8a65'].map(function(c){
+        return '<div class="heat-legend-cell" style="background:'+c+'"></div>';
+      }).join('')
+    + '</div><span>Caliente</span></div>';
+
+  hg.innerHTML =
+    // Heatmap horas
+    '<div class="heat-card">'
+    + '<div class="heat-title">Distribución por hora</div>'
+    + '<div class="heat-subtitle">Servicios registrados por franja horaria · momentos calientes vs. fríos</div>'
+    + leyenda
+    + horaRows
+    + '</div>'
+    // Heatmap días
+    + '<div class="heat-card">'
+    + '<div class="heat-title">Distribución por día de semana</div>'
+    + '<div class="heat-subtitle">Volumen acumulado Lun–Sáb · ticket promedio por día</div>'
+    + leyenda
+    + '<div class="heat-dias">' + diaCells + '</div>'
+    + '</div>';
+}
+
+
 // ═══ INIT ════════════════════════════════════════════════
 function init() {
   document.getElementById('configBanner').classList.add('hidden');
@@ -381,10 +762,6 @@ function selPeriodoSocios(p, el){
     lunes.setDate(hoyS.getDate() - (dow === 0 ? 6 : dow - 1)); // retroceder al lunes
     lunes.setHours(0,0,0,0);
     cargarRangoSocios(lunes.toISOString().slice(0,10), hoyS.toISOString().slice(0,10), 'semana');
-  } else if(p === '30'){
-    var hasta30 = new Date();
-    var desde30 = new Date(); desde30.setDate(hasta30.getDate() - 30);
-    cargarRangoSocios(desde30.toISOString().slice(0,10), hasta30.toISOString().slice(0,10));
   } else if(p === 'mes'){
     var ahora = new Date();
     var desde2 = ahora.getFullYear()+'-'+String(ahora.getMonth()+1).padStart(2,'0')+'-01';
@@ -449,9 +826,12 @@ function cargarRangoSocios(desde, hasta, modo){
     });
     document.getElementById('btnRefresh').classList.remove('spinning');
     renderDatos(consolidado);
-    // Banner de progreso semanal
-    if(modo === 'semana') renderBannerSemana(consolidado, desde, hasta);
-    else ocultarBannerSemana();
+    renderBannerPeriodo(consolidado, desde, hasta, modo || 'custom');
+    // Cargar registros detalle para heatmaps (en paralelo, no bloquea el render)
+    cargarRegistrosDetalle(dias, function(registros){
+      var metricas = procesarRegistros(registros);
+      renderAnalisis(metricas);
+    });
     setStatus('live', '☁ Railway · ' + desde + ' → ' + hasta);
     var lu = document.getElementById('lastUpdate');
     if(lu) lu.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -460,86 +840,7 @@ function cargarRangoSocios(desde, hasta, modo){
 }
 
 // ─── BANNER PROGRESO SEMANAL ──────────────────────────────────────────────────
-function renderBannerSemana(data, desde, hasta){
-  var el = document.getElementById('bannerSemana');
-  if(!el) return;
-
-  var fact   = data.facturacion || 0;
-  var svc    = data.servicios   || 0;
-  var tk     = svc > 0 ? Math.round(fact / svc) : 0;
-
-  // Días laborables de la semana (lun-sáb = 6 días)
-  var DIAS_SEM  = 6;
-  var hoy       = new Date();
-  var dow       = hoy.getDay(); // 0=dom,1=lun,...,6=sáb
-  var diasLunes = (dow === 0) ? 6 : dow - 1; // días desde lunes (lun=0,mar=1,...,sáb=5)
-  var diasOp    = Math.min(diasLunes + 1, DIAS_SEM); // días operados esta semana (incl. hoy)
-
-  // Meta semanal = Plan mensual / 4.33 semanas
-  var META_MES  = 6500000;
-  var META_SEM  = Math.round(META_MES / 4.33);
-  var pct       = META_SEM > 0 ? Math.min(100, Math.round(fact / META_SEM * 100)) : 0;
-  var color     = pct >= 100 ? 'var(--ok)' : pct >= 70 ? 'var(--gold)' : 'var(--err)';
-
-  // Proyección al sábado
-  var diasRest  = Math.max(0, DIAS_SEM - diasOp);
-  var factDia   = diasOp > 0 ? fact / diasOp : 0;
-  var proy      = Math.round(fact + factDia * diasRest);
-  var faltaMeta = Math.max(0, META_SEM - fact);
-  var necesDia  = diasRest > 0 ? Math.round(faltaMeta / diasRest) : 0;
-
-  // Nombres de días para la barra visual
-  var dias = ['Lun','Mar','Mié','Jue','Vie','Sáb'];
-  var barDias = dias.map(function(d, i){
-    var activo = i < diasOp;
-    var esHoy  = i === diasLunes;
-    return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1">'
-      + '<div style="width:100%;height:6px;border-radius:3px;background:'
-      + (activo ? color : 'var(--border)') + ';'
-      + (esHoy ? 'box-shadow:0 0 0 2px ' + color + '40' : '') + '"></div>'
-      + '<span style="font-size:9px;font-family:var(--mono);color:'
-      + (esHoy ? color : 'var(--text3)') + ';font-weight:' + (esHoy ? '700' : '400') + '">' + d + '</span>'
-      + '</div>';
-  }).join('');
-
-  // Fecha de inicio de semana formateada
-  var meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-  var dDesde = new Date(desde + 'T12:00:00');
-  var dHasta = new Date(hasta  + 'T12:00:00');
-  var rango  = dDesde.getDate()+' '+meses[dDesde.getMonth()]+' → '+dHasta.getDate()+' '+meses[dHasta.getMonth()];
-
-  el.style.display = 'block';
-  el.innerHTML =
-    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">'
-    + '<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold)">Esta semana · ' + rango + '</span>'
-    + '<span style="font-family:var(--mono);font-size:10px;color:var(--text3)">'
-    + diasOp + ' día' + (diasOp !== 1 ? 's' : '') + ' operado' + (diasOp !== 1 ? 's' : '') + ' · '
-    + diasRest + ' restante' + (diasRest !== 1 ? 's' : '') + '</span>'
-    + '</div>'
-    // Barra de días
-    + '<div style="display:flex;gap:4px;margin-bottom:14px">' + barDias + '</div>'
-    // KPIs de semana
-    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">'
-    + kpiSem('Facturado', '$'+Math.round(fact/1000)+'K', 'var(--ok)')
-    + kpiSem('Servicios', svc.toLocaleString('es-CL'), 'var(--text)')
-    + kpiSem('Ticket prom.', '$'+tk.toLocaleString('es-CL'), 'var(--text)')
-    + kpiSem('Proyectado sáb.', '$'+(Math.round(proy/1000))+'K', color)
-    + '</div>'
-    // Barra de progreso vs meta semanal
-    + '<div style="margin-bottom:6px;display:flex;justify-content:space-between;font-size:11px">'
-    + '<span style="color:var(--text2)">Avance vs meta semanal ($' + Math.round(META_SEM/1000) + 'K)</span>'
-    + '<span style="font-family:var(--mono);font-weight:700;color:' + color + '">' + pct + '%</span>'
-    + '</div>'
-    + '<div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:'
-    + (necesDia > 0 ? '8' : '0') + 'px">'
-    + '<div style="height:100%;width:' + pct + '%;background:' + color + ';border-radius:4px;transition:width .6s"></div>'
-    + '</div>'
-    + (necesDia > 0
-      ? '<div style="font-size:11px;color:var(--muted2)">Faltan <strong style="color:var(--text)">$'
-        + faltaMeta.toLocaleString('es-CL') + '</strong> · necesitan <strong style="color:var(--text)">$'
-        + necesDia.toLocaleString('es-CL') + '/día</strong></div>'
-      : '<div style="font-size:11px;color:var(--ok)">✓ Meta semanal alcanzada</div>');
-}
+// renderBannerSemana → reemplazada por renderBannerPeriodo
 
 function kpiSem(lbl, val, color){
   return '<div style="text-align:center;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px">'
@@ -548,10 +849,6 @@ function kpiSem(lbl, val, color){
     + '</div>';
 }
 
-function ocultarBannerSemana(){
-  var el = document.getElementById('bannerSemana');
-  if(el) el.style.display = 'none';
-}
 // ═══ CARGA DE DATOS ══════════════════════════════════════
 function cargarDatos(showSpinner) {
   if (showSpinner) {
@@ -566,7 +863,12 @@ function cargarDatos(showSpinner) {
       document.getElementById('btnRefresh').classList.remove('spinning');
       if (json.ok && json.data) {
         renderDatos(json.data);
-        ocultarBannerSemana();
+        var fechaHoy2 = fecha;
+        renderBannerPeriodo(json.data, fechaHoy2, fechaHoy2, 'hoy');
+        // Heatmaps del día
+        cargarRegistrosDetalle([fechaHoy2], function(registros){
+          renderAnalisis(procesarRegistros(registros));
+        });
         setStatus('live', '☁ Railway · ' + new Date().toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'}));
         var lu = document.getElementById('lastUpdate');
         if(lu) lu.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
