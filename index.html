@@ -172,7 +172,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   <!-- FECHA -->
   <div class="fecha-bar">
     <button class="btn-hoy on" id="btnPeriodoHoy"   onclick="selPeriodoSocios('hoy',this)">Hoy</button>
-    <button class="btn-hoy"    id="btnPeriodo7"      onclick="selPeriodoSocios('7',this)">Últ. 7 días</button>
+    <button class="btn-hoy"    id="btnPeriodo7"      onclick="selPeriodoSocios('semana',this)">Esta semana</button>
     <button class="btn-hoy"    id="btnPeriodo30"     onclick="selPeriodoSocios('30',this)">Últ. 30 días</button>
     <button class="btn-hoy"    id="btnPeriodoMes"    onclick="selPeriodoSocios('mes',this)">Este mes</button>
     <button class="btn-hoy"    id="btnPeriodoCustom" onclick="selPeriodoSocios('custom',this)">Personalizado</button>
@@ -224,6 +224,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       </div>
     </div>
   </div>
+  <!-- BANNER SEMANA (visible solo en modo "Esta semana") -->
+  <div id="bannerSemana" style="display:none;background:linear-gradient(135deg,var(--surface) 0%,var(--surface2) 100%);border:1px solid var(--border);border-radius:10px;padding:14px 20px;margin-bottom:18px"></div>
+
   <!-- KPIs -->
   <div class="kpi-grid" id="kpiGrid">
     <div class="kpi loading"><div class="kpi-lbl">Servicios</div><div class="kpi-val skel" style="height:28px;width:40px">&nbsp;</div></div>
@@ -370,10 +373,18 @@ function selPeriodoSocios(p, el){
     fechaSel = fechaHoy();
     document.getElementById('fechaInput').value = fechaSel;
     cargarDatos(true);
-  } else if(p === '7' || p === '30'){
-    var hasta = new Date();
-    var desde = new Date(); desde.setDate(hasta.getDate() - parseInt(p));
-    cargarRangoSocios(desde.toISOString().slice(0,10), hasta.toISOString().slice(0,10));
+  } else if(p === 'semana'){
+    // Lunes de la semana actual → hoy
+    var hoyS = new Date();
+    var dow = hoyS.getDay(); // 0=dom, 1=lun ... 6=sab
+    var lunes = new Date(hoyS);
+    lunes.setDate(hoyS.getDate() - (dow === 0 ? 6 : dow - 1)); // retroceder al lunes
+    lunes.setHours(0,0,0,0);
+    cargarRangoSocios(lunes.toISOString().slice(0,10), hoyS.toISOString().slice(0,10), 'semana');
+  } else if(p === '30'){
+    var hasta30 = new Date();
+    var desde30 = new Date(); desde30.setDate(hasta30.getDate() - 30);
+    cargarRangoSocios(desde30.toISOString().slice(0,10), hasta30.toISOString().slice(0,10));
   } else if(p === 'mes'){
     var ahora = new Date();
     var desde2 = ahora.getFullYear()+'-'+String(ahora.getMonth()+1).padStart(2,'0')+'-01';
@@ -393,7 +404,7 @@ function recargarSocios(){
     (periodoSociosActual==='7'?'7':periodoSociosActual==='30'?'30':
      periodoSociosActual==='mes'?'Mes':'Custom')));
 }
-function cargarRangoSocios(desde, hasta){
+function cargarRangoSocios(desde, hasta, modo){
   document.getElementById('btnRefresh').classList.add('spinning');
   setStatus('loading', 'Cargando ' + desde + ' → ' + hasta + '…');
   var dias = [];
@@ -438,11 +449,108 @@ function cargarRangoSocios(desde, hasta){
     });
     document.getElementById('btnRefresh').classList.remove('spinning');
     renderDatos(consolidado);
+    // Banner de progreso semanal
+    if(modo === 'semana') renderBannerSemana(consolidado, desde, hasta);
+    else ocultarBannerSemana();
     setStatus('live', '☁ Railway · ' + desde + ' → ' + hasta);
     var lu = document.getElementById('lastUpdate');
     if(lu) lu.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
     resetCountdown();
   });
+}
+
+// ─── BANNER PROGRESO SEMANAL ──────────────────────────────────────────────────
+function renderBannerSemana(data, desde, hasta){
+  var el = document.getElementById('bannerSemana');
+  if(!el) return;
+
+  var fact   = data.facturacion || 0;
+  var svc    = data.servicios   || 0;
+  var tk     = svc > 0 ? Math.round(fact / svc) : 0;
+
+  // Días laborables de la semana (lun-sáb = 6 días)
+  var DIAS_SEM  = 6;
+  var hoy       = new Date();
+  var dow       = hoy.getDay(); // 0=dom,1=lun,...,6=sáb
+  var diasLunes = (dow === 0) ? 6 : dow - 1; // días desde lunes (lun=0,mar=1,...,sáb=5)
+  var diasOp    = Math.min(diasLunes + 1, DIAS_SEM); // días operados esta semana (incl. hoy)
+
+  // Meta semanal = Plan mensual / 4.33 semanas
+  var META_MES  = 6500000;
+  var META_SEM  = Math.round(META_MES / 4.33);
+  var pct       = META_SEM > 0 ? Math.min(100, Math.round(fact / META_SEM * 100)) : 0;
+  var color     = pct >= 100 ? 'var(--ok)' : pct >= 70 ? 'var(--gold)' : 'var(--err)';
+
+  // Proyección al sábado
+  var diasRest  = Math.max(0, DIAS_SEM - diasOp);
+  var factDia   = diasOp > 0 ? fact / diasOp : 0;
+  var proy      = Math.round(fact + factDia * diasRest);
+  var faltaMeta = Math.max(0, META_SEM - fact);
+  var necesDia  = diasRest > 0 ? Math.round(faltaMeta / diasRest) : 0;
+
+  // Nombres de días para la barra visual
+  var dias = ['Lun','Mar','Mié','Jue','Vie','Sáb'];
+  var barDias = dias.map(function(d, i){
+    var activo = i < diasOp;
+    var esHoy  = i === diasLunes;
+    return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1">'
+      + '<div style="width:100%;height:6px;border-radius:3px;background:'
+      + (activo ? color : 'var(--border)') + ';'
+      + (esHoy ? 'box-shadow:0 0 0 2px ' + color + '40' : '') + '"></div>'
+      + '<span style="font-size:9px;font-family:var(--mono);color:'
+      + (esHoy ? color : 'var(--text3)') + ';font-weight:' + (esHoy ? '700' : '400') + '">' + d + '</span>'
+      + '</div>';
+  }).join('');
+
+  // Fecha de inicio de semana formateada
+  var meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  var dDesde = new Date(desde + 'T12:00:00');
+  var dHasta = new Date(hasta  + 'T12:00:00');
+  var rango  = dDesde.getDate()+' '+meses[dDesde.getMonth()]+' → '+dHasta.getDate()+' '+meses[dHasta.getMonth()];
+
+  el.style.display = 'block';
+  el.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">'
+    + '<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold)">Esta semana · ' + rango + '</span>'
+    + '<span style="font-family:var(--mono);font-size:10px;color:var(--text3)">'
+    + diasOp + ' día' + (diasOp !== 1 ? 's' : '') + ' operado' + (diasOp !== 1 ? 's' : '') + ' · '
+    + diasRest + ' restante' + (diasRest !== 1 ? 's' : '') + '</span>'
+    + '</div>'
+    // Barra de días
+    + '<div style="display:flex;gap:4px;margin-bottom:14px">' + barDias + '</div>'
+    // KPIs de semana
+    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">'
+    + kpiSem('Facturado', '$'+Math.round(fact/1000)+'K', 'var(--ok)')
+    + kpiSem('Servicios', svc.toLocaleString('es-CL'), 'var(--text)')
+    + kpiSem('Ticket prom.', '$'+tk.toLocaleString('es-CL'), 'var(--text)')
+    + kpiSem('Proyectado sáb.', '$'+(Math.round(proy/1000))+'K', color)
+    + '</div>'
+    // Barra de progreso vs meta semanal
+    + '<div style="margin-bottom:6px;display:flex;justify-content:space-between;font-size:11px">'
+    + '<span style="color:var(--text2)">Avance vs meta semanal ($' + Math.round(META_SEM/1000) + 'K)</span>'
+    + '<span style="font-family:var(--mono);font-weight:700;color:' + color + '">' + pct + '%</span>'
+    + '</div>'
+    + '<div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:'
+    + (necesDia > 0 ? '8' : '0') + 'px">'
+    + '<div style="height:100%;width:' + pct + '%;background:' + color + ';border-radius:4px;transition:width .6s"></div>'
+    + '</div>'
+    + (necesDia > 0
+      ? '<div style="font-size:11px;color:var(--muted2)">Faltan <strong style="color:var(--text)">$'
+        + faltaMeta.toLocaleString('es-CL') + '</strong> · necesitan <strong style="color:var(--text)">$'
+        + necesDia.toLocaleString('es-CL') + '/día</strong></div>'
+      : '<div style="font-size:11px;color:var(--ok)">✓ Meta semanal alcanzada</div>');
+}
+
+function kpiSem(lbl, val, color){
+  return '<div style="text-align:center;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px">'
+    + '<div style="font-family:var(--mono);font-size:18px;font-weight:700;color:' + color + '">' + val + '</div>'
+    + '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-top:2px">' + lbl + '</div>'
+    + '</div>';
+}
+
+function ocultarBannerSemana(){
+  var el = document.getElementById('bannerSemana');
+  if(el) el.style.display = 'none';
 }
 // ═══ CARGA DE DATOS ══════════════════════════════════════
 function cargarDatos(showSpinner) {
@@ -458,6 +566,7 @@ function cargarDatos(showSpinner) {
       document.getElementById('btnRefresh').classList.remove('spinning');
       if (json.ok && json.data) {
         renderDatos(json.data);
+        ocultarBannerSemana();
         setStatus('live', '☁ Railway · ' + new Date().toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'}));
         var lu = document.getElementById('lastUpdate');
         if(lu) lu.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
