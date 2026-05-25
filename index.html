@@ -371,24 +371,24 @@ function procesarRegistros(registros){
       porHora[hora].fact += fact;
     }
 
-    // Por día de semana — usar fecha del registro
-    var fechaStr = r.fecha || '';
-    // fecha puede venir como "DD/MM/YYYY" (sistema tickets) o "YYYY-MM-DD"
-    var d;
-    if(fechaStr.includes('-')){
-      d = new Date(fechaStr + 'T12:00:00');
-    } else if(fechaStr.includes('/')){
-      var pts = fechaStr.split('/');
-      d = new Date(pts[2]+'-'+pts[1]+'-'+pts[0]+'T12:00:00');
+    // Por día de semana — Railway devuelve fecha_display (ej: "25/5/2026"), con fallback a fecha
+    var fechaRaw = r.fecha_display || r.fecha || '';
+    var d2, key;
+    if(fechaRaw.includes('/')){
+      var pts = fechaRaw.split('/');
+      var dd2 = pts[0].padStart(2,'0'), mm2 = pts[1].padStart(2,'0'), yy2 = pts[2];
+      key = yy2+'-'+mm2+'-'+dd2;
+      d2  = new Date(key+'T12:00:00');
+    } else if(fechaRaw.includes('-')){
+      key = fechaRaw;
+      d2  = new Date(key+'T12:00:00');
     }
-    if(d && !isNaN(d)){
-      var dow = d.getDay(); // 0=dom,1=lun,...,6=sáb
-      var idx = (dow === 0) ? -1 : dow - 1; // lun=0,...,sáb=5, dom=-1
-      if(idx >= 0 && idx < 6){
-        porDia[idx].cnt  += 1;
-        porDia[idx].fact += fact;
-        // Por fecha (para mejor día)
-        var key = fechaStr.includes('-') ? fechaStr : pts[2]+'-'+pts[1]+'-'+pts[0];
+    if(d2 && !isNaN(d2)){
+      var dow2 = d2.getDay();
+      var dIdx = (dow2 === 0) ? -1 : dow2 - 1;
+      if(dIdx >= 0 && dIdx < 6){
+        porDia[dIdx].cnt  += 1;
+        porDia[dIdx].fact += fact;
         if(!porFecha[key]) porFecha[key] = {cnt:0, fact:0, fecha:key};
         porFecha[key].cnt++;
         porFecha[key].fact += fact;
