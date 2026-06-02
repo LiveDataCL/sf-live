@@ -324,6 +324,22 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 </div>
 <div class="toast" id="toastel"></div>
 <script>
+// ── PLAN DE FACTURACIÓN — sincronizado con barberpilot-control ──
+var PLAN_S_BARBERIA = [
+  6500000, 8000000, 9500000, 11500000,
+  13500000, 15500000, 17000000, 19000000,
+  17000000, 18500000, 20000000, 21500000
+];
+var PLAN_BASE_AÑO = 2026, PLAN_BASE_MES_IDX = 4; // Mayo=4 (0-based)
+
+function metaPlanParaPeriodo(periodo){ // periodo = 'YYYY-MM'
+  var p = periodo.split('-');
+  var y = parseInt(p[0]), m = parseInt(p[1])-1;
+  var idx = (y-PLAN_BASE_AÑO)*12 + (m-PLAN_BASE_MES_IDX);
+  idx = Math.max(0, Math.min(idx, PLAN_S_BARBERIA.length-1));
+  return PLAN_S_BARBERIA[idx];
+}
+
 var API_URL   = 'https://barberpilot-api-production.up.railway.app';
 var SHEETS_URL = '';
 var INTERVALO  = 60;
@@ -440,8 +456,11 @@ function renderBannerPeriodo(data, desde, hasta, modo){
   var svc    = data.servicios   || 0;
   var tk     = svc > 0 ? Math.round(fact / svc) : 0;
 
-  // Meta y contexto según período
-  var META_MES = 6500000;
+  // Meta dinámica según el plan de facturación mensual
+  var ahora = new Date();
+  var periodoActual = ahora.getFullYear() + '-' +
+    String(ahora.getMonth()+1).padStart(2,'0');
+  var META_MES = metaPlanParaPeriodo(periodoActual);
   var meta, metaLabel, diasOp, diasTot, diasRest;
 
   if(modo === 'hoy'){
