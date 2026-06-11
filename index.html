@@ -712,29 +712,41 @@ function renderAnalisis(metricas){
 
 
 // ═══ SILLAS EN VIVO ══════════════════════════════════════
+// Barbers keyed by bid (b1-b4) — same structure as barberpilot-control
 var SILLAS_BARBS = [
-  {id:'didian',  nom:'Didian'},
-  {id:'emerson', nom:'Emerson'},
-  {id:'samuel',  nom:'Samuel'},
-  {id:'david',   nom:'David'}
+  {id:'b1', nom:'Didian'},
+  {id:'b2', nom:'Emerson'},
+  {id:'b3', nom:'Samuel'},
+  {id:'b4', nom:'David'}
 ];
-var _sillasData    = null;
-var _sillasTick    = null;
-var _sillasRefresh = null;
+var _sillasBarberos = {}; // from /queue/control  → j.barberos
+var _sillasHorarios = {}; // from /horarios/fecha → keyed by bid
+var _sillasTick     = null;
+var _sillasRefresh  = null;
 var SILLAS_INTERVALO = 30000; // ms
 
+function _sillasHoy(){
+  var n = new Date();
+  return n.getFullYear() + '-' + String(n.getMonth()+1).padStart(2,'0') + '-' + String(n.getDate()).padStart(2,'0');
+}
+
 function cargarSillas(){
-  fetch(API_URL + '/queue/control')
-    .then(function(r){ return r.json(); })
-    .then(function(json){
-      if(json.ok){
-        _sillasData = json.data || {};
-        renderSillas();
-        var ts = document.getElementById('sillasTs');
-        if(ts) ts.textContent = new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-      }
-    })
-    .catch(function(){});
+  var hoy = _sillasHoy();
+  Promise.all([
+    fetch(API_URL + '/queue/control').then(function(r){ return r.json(); }).catch(function(){ return {ok:false}; }),
+    fetch(API_URL + '/horarios/' + hoy).then(function(r){ return r.json(); }).catch(function(){ return {ok:false}; })
+  ]).then(function(res){
+    var queue = res[0], hor = res[1];
+    if(queue.ok) _sillasBarberos = queue.barberos || {};
+    // Rebuild horarios keyed by bid
+    _sillasHorarios = {};
+    if(hor.ok && hor.horarios){
+      hor.horarios.forEach(function(h){ _sillasHorarios[h.bid] = h; });
+    }
+    renderSillas();
+    var ts = document.getElementById('sillasTs');
+    if(ts) ts.textContent = new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  });
 }
 
 function _cronoStr(service_start){
@@ -749,14 +761,19 @@ function renderSillas(){
   if(!rows) return;
   var h = '';
   SILLAS_BARBS.forEach(function(b){
-    var d = _sillasData ? (_sillasData[b.id] || null) : null;
+    var bd  = _sillasBarberos[b.id] || null;   // queue data
+    var hor = _sillasHorarios[b.id] || null;   // horario data
+
+    // Presence: has entrada recorded and no salida yet
+    var presente = hor && hor.entrada && !hor.salida;
+    var seWas    = hor && hor.entrada && hor.salida;  // already left
+
     var dotCls, infoHtml, cronoHtml = '', esperaHtml = '';
-    if(!d){
-      dotCls   = 'rojo';
-      infoHtml = '<span style="color:var(--text3);font-style:italic">No ha llegado · fuera de turno</span>';
-    } else if(d.enServicio){
+
+    if(bd && bd.enServicio){
+      // Cutting right now → green regardless of horario (queue is ground truth)
       dotCls = 'verde';
-      var sv = d.enServicio;
+      var sv  = bd.enServicio;
       var cli = sv.client_name || 'Cliente';
       var svc = sv.service     || '';
       infoHtml = '<strong style="color:var(--text)">' + cli + '</strong>'
@@ -764,14 +781,26 @@ function renderSillas(){
       if(sv.service_start){
         cronoHtml = '<span class="silla-crono" id="crono-' + b.id + '">' + _cronoStr(sv.service_start) + '</span>';
       }
-      var nW = (d.enEspera || []).length;
+      var nW = (bd.enEspera || []).length;
       if(nW > 0) esperaHtml = '<span class="silla-espera">' + nW + ' en espera</span>';
-    } else {
+    } else if(presente){
+      // Present but not cutting → yellow
       dotCls   = 'amarillo';
       infoHtml = '<span style="color:var(--text2)">Disponible · esperando cliente</span>';
-      var nW2 = (d.enEspera || []).length;
-      if(nW2 > 0) esperaHtml = '<span class="silla-espera">' + nW2 + ' en espera</span>';
+      if(bd){
+        var nW2 = (bd.enEspera || []).length;
+        if(nW2 > 0) esperaHtml = '<span class="silla-espera">' + nW2 + ' en espera</span>';
+      }
+    } else if(seWas){
+      // Checked in and out → red with "ya salió" label
+      dotCls   = 'rojo';
+      infoHtml = '<span style="color:var(--text3);font-style:italic">Salió a las ' + hor.salida + '</span>';
+    } else {
+      // No horario entry → hasn't arrived
+      dotCls   = 'rojo';
+      infoHtml = '<span style="color:var(--text3);font-style:italic">No ha llegado</span>';
     }
+
     h += '<div class="silla-row">'
        + '<span class="silla-dot ' + dotCls + '"></span>'
        + '<span class="silla-nom">' + b.nom + '</span>'
@@ -784,12 +813,11 @@ function renderSillas(){
 }
 
 function tickSillas(){
-  if(!_sillasData) return;
   SILLAS_BARBS.forEach(function(b){
-    var d = _sillasData[b.id];
-    if(!d || !d.enServicio || !d.enServicio.service_start) return;
+    var bd = _sillasBarberos[b.id];
+    if(!bd || !bd.enServicio || !bd.enServicio.service_start) return;
     var el = document.getElementById('crono-' + b.id);
-    if(el) el.textContent = _cronoStr(d.enServicio.service_start);
+    if(el) el.textContent = _cronoStr(bd.enServicio.service_start);
   });
 }
 
