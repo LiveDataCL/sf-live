@@ -185,22 +185,14 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   .main{padding:14px 16px}
 }
 
-/* ── SILLAS EN VIVO ─────────────────────────────────────────────────────────── */
-.sillas-live{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:13px 16px;margin-bottom:16px}
-.sillas-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-.sillas-lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);display:flex;align-items:center;gap:7px}
-.sillas-ts{font-size:10px;opacity:.5;font-weight:400;text-transform:none;letter-spacing:0;font-family:var(--mono)}
-.silla-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;min-height:34px}
-.silla-row:last-child{border-bottom:none}
-.silla-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;transition:background .3s}
+/* ── STATUS DOTS + BADGES (usados dentro de .bb-head) ──────────────────────── */
+.silla-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;display:inline-block}
 .silla-dot.verde{background:#4caf50;animation:blink-verde 1.2s ease-in-out infinite}
 .silla-dot.amarillo{background:#ffc107}
-.silla-dot.rojo{background:var(--err)}
-@keyframes blink-verde{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(76,175,80,.6)}60%{opacity:.6;box-shadow:0 0 0 5px rgba(76,175,80,0)}}
-.silla-nom{font-weight:700;min-width:68px;color:var(--text)}
-.silla-info{flex:1;color:var(--text2);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.silla-crono{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ok);min-width:46px;text-align:right;flex-shrink:0}
-.silla-espera{padding:2px 8px;border-radius:20px;background:var(--warn-soft);border:1px solid rgba(139,94,0,.2);color:var(--warn);font-size:10px;font-weight:700;font-family:var(--mono);flex-shrink:0;white-space:nowrap}
+.silla-dot.rojo{background:#e57373}
+@keyframes blink-verde{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(76,175,80,.7)}60%{opacity:.6;box-shadow:0 0 0 5px rgba(76,175,80,0)}}
+.silla-crono{font-family:var(--mono);font-size:11px;font-weight:700;color:#7ee8a2}
+.silla-espera{padding:1px 6px;border-radius:20px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.75);font-size:10px;font-weight:600;font-family:var(--mono);white-space:nowrap}
 </style>
 </head>
 <body>
@@ -263,23 +255,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       <span style="font-size:10px;color:var(--text3)" id="countdownTxt">60s</span>
     </div>
   </div>
-  <!-- SILLAS EN VIVO -->
-  <div class="sillas-live">
-    <div class="sillas-hdr">
-      <span class="sillas-lbl">
-        <span class="status-dot live" style="width:8px;height:8px"></span>
-        Sillas en vivo
-      </span>
-      <span class="sillas-ts" id="sillasTs"></span>
-    </div>
-    <div id="sillasRows">
-      <div class="skel" style="height:32px;margin:4px 0;border-radius:var(--r)"></div>
-      <div class="skel" style="height:32px;margin:4px 0;border-radius:var(--r)"></div>
-      <div class="skel" style="height:32px;margin:4px 0;border-radius:var(--r)"></div>
-      <div class="skel" style="height:32px;margin:4px 0;border-radius:var(--r)"></div>
-    </div>
-  </div>
-
   <!-- Resumen acumulado del mes -->
   <div id="resumenMes" style="display:none;background:linear-gradient(135deg,var(--surface) 0%,var(--surface2) 100%);border:1px solid var(--border);border-radius:10px;padding:14px 20px;margin-bottom:18px;gap:0;flex-wrap:wrap;align-items:stretch">
     <div style="width:100%;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
@@ -744,8 +719,6 @@ function cargarSillas(){
       hor.horarios.forEach(function(h){ _sillasHorarios[h.bid] = h; });
     }
     renderSillas();
-    var ts = document.getElementById('sillasTs');
-    if(ts) ts.textContent = new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   });
 }
 
@@ -757,59 +730,36 @@ function _cronoStr(service_start){
 }
 
 function renderSillas(){
-  var rows = document.getElementById('sillasRows');
-  if(!rows) return;
-  var h = '';
   SILLAS_BARBS.forEach(function(b){
-    var bd  = _sillasBarberos[b.id] || null;   // queue data
-    var hor = _sillasHorarios[b.id] || null;   // horario data
+    var dotEl  = document.getElementById('bbdot-'  + b.id);
+    var liveEl = document.getElementById('bblive-' + b.id);
+    if(!dotEl) return; // bb-cards not rendered yet
 
-    // Presence: has entrada recorded and no salida yet
+    var bd  = _sillasBarberos[b.id] || null;
+    var hor = _sillasHorarios[b.id] || null;
+
     var presente = hor && hor.entrada && !hor.salida;
-    var seWas    = hor && hor.entrada && hor.salida;  // already left
+    var seWas    = hor && hor.entrada && hor.salida;
 
-    var dotCls, infoHtml, cronoHtml = '', esperaHtml = '';
+    // Update the dot color
+    dotEl.className = 'silla-dot ' + (
+      (bd && bd.enServicio) ? 'verde' :
+      presente              ? 'amarillo' :
+                              'rojo'
+    );
 
-    if(bd && bd.enServicio){
-      // Cutting right now → green regardless of horario (queue is ground truth)
-      dotCls = 'verde';
-      var sv  = bd.enServicio;
-      var cli = sv.client_name || 'Cliente';
-      var svc = sv.service     || '';
-      infoHtml = '<strong style="color:var(--text)">' + cli + '</strong>'
-               + (svc ? '<span style="color:var(--text3)"> · ' + svc + '</span>' : '');
-      if(sv.service_start){
-        cronoHtml = '<span class="silla-crono" id="crono-' + b.id + '">' + _cronoStr(sv.service_start) + '</span>';
-      }
-      var nW = (bd.enEspera || []).length;
-      if(nW > 0) esperaHtml = '<span class="silla-espera">' + nW + ' en espera</span>';
-    } else if(presente){
-      // Present but not cutting → yellow
-      dotCls   = 'amarillo';
-      infoHtml = '<span style="color:var(--text2)">Disponible · esperando cliente</span>';
-      if(bd){
-        var nW2 = (bd.enEspera || []).length;
-        if(nW2 > 0) esperaHtml = '<span class="silla-espera">' + nW2 + ' en espera</span>';
-      }
-    } else if(seWas){
-      // Checked in and out → red with "ya salió" label
-      dotCls   = 'rojo';
-      infoHtml = '<span style="color:var(--text3);font-style:italic">Salió a las ' + hor.salida + '</span>';
-    } else {
-      // No horario entry → hasn't arrived
-      dotCls   = 'rojo';
-      infoHtml = '<span style="color:var(--text3);font-style:italic">No ha llegado</span>';
+    // Build the right-side live content
+    var liveHtml = '';
+    if(bd && bd.enServicio && bd.enServicio.service_start){
+      liveHtml += '<span class="silla-crono" id="crono-' + b.id + '">'
+               +  _cronoStr(bd.enServicio.service_start) + '</span>';
     }
-
-    h += '<div class="silla-row">'
-       + '<span class="silla-dot ' + dotCls + '"></span>'
-       + '<span class="silla-nom">' + b.nom + '</span>'
-       + '<span class="silla-info">' + infoHtml + '</span>'
-       + cronoHtml
-       + esperaHtml
-       + '</div>';
+    var nW = bd ? (bd.enEspera || []).length : 0;
+    if(nW > 0){
+      liveHtml += '<span class="silla-espera">' + nW + (nW === 1 ? ' esp.' : ' esp.') + '</span>';
+    }
+    if(liveEl) liveEl.innerHTML = liveHtml;
   });
-  rows.innerHTML = h;
 }
 
 function tickSillas(){
@@ -1078,17 +1028,29 @@ function kpi(lbl, val, cls, sub) {
     + '<div class="kpi-val'+(cls?' '+cls:'')+'">'+val+'</div>'
     + '<div class="kpi-sub">'+sub+'</div></div>';
 }
+var BB_BID = {Didian:'b1', Emerson:'b2', Samuel:'b3', David:'b4'};
+
 function renderBarberos(porBB) {
   var BARBEROS = ['Didian', 'Emerson', 'Samuel', 'David'];
   var maxTot = 0;
   BARBEROS.forEach(function(b) { if (porBB[b] && porBB[b].tot > maxTot) maxTot = porBB[b].tot; });
   var h = '';
   BARBEROS.forEach(function(b) {
-    var d = porBB[b] || {tot:0, bb:0, neg:0, cnt:0};
-    var tk = d.cnt > 0 ? Math.round(d.tot / d.cnt) : 0;
+    var d   = porBB[b] || {tot:0, bb:0, neg:0, cnt:0};
+    var bid = BB_BID[b] || b;
+    var tk  = d.cnt > 0 ? Math.round(d.tot / d.cnt) : 0;
     var pct = maxTot > 0 ? Math.round(d.tot / maxTot * 100) : 0;
     h += '<div class="bb-card">'
-      + '<div class="bb-head"><span class="bb-name">'+b+'</span><span class="bb-cnt">'+d.cnt+' svc</span></div>'
+      + '<div class="bb-head">'
+      + '<div style="display:flex;align-items:center;gap:7px">'
+      + '<span class="silla-dot rojo" id="bbdot-'+bid+'"></span>'
+      + '<span class="bb-name">'+b+'</span>'
+      + '</div>'
+      + '<div style="display:flex;align-items:center;gap:6px">'
+      + '<span class="bb-cnt">'+d.cnt+' svc</span>'
+      + '<span id="bblive-'+bid+'"></span>'
+      + '</div>'
+      + '</div>'
       + '<div class="bb-body">'
       + '<div class="bb-row"><span class="l">Facturado</span><span class="v">$'+fmt(d.tot)+'</span></div>'
       + '<div class="bb-row"><span class="l">A cobrar</span><span class="v g">$'+fmt(d.bb)+'</span></div>'
@@ -1098,6 +1060,8 @@ function renderBarberos(porBB) {
       + '</div></div>';
   });
   document.getElementById('bbGrid').innerHTML = h;
+  // Immediately apply any already-loaded sillas data
+  if(_sillasBarberos && Object.keys(_sillasBarberos).length) renderSillas();
 }
 function renderPagos(porPago, total) {
   if (!total) { document.getElementById('pagoGrid').innerHTML = '<div class="empty">Sin datos</div>'; return; }
