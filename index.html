@@ -759,6 +759,9 @@ function renderSillas(){
       liveHtml += '<span class="silla-espera">' + nW + (nW === 1 ? ' esp.' : ' esp.') + '</span>';
     }
     if(liveEl) liveEl.innerHTML = liveHtml;
+
+    var absentEl = document.getElementById('bbabsent-' + b.id);
+    if(absentEl) absentEl.textContent = (bd && bd.available === false) ? ' ⏸' : '';
   });
 }
 
@@ -1045,6 +1048,7 @@ function renderBarberos(porBB) {
       + '<div style="display:flex;align-items:center;gap:7px">'
       + '<span class="silla-dot rojo" id="bbdot-'+bid+'"></span>'
       + '<span class="bb-name">'+b+'</span>'
+      + '<span id="bbabsent-'+bid+'" style="font-size:13px" title="Temporalmente ausente"></span>'
       + '</div>'
       + '<div style="display:flex;align-items:center;gap:6px">'
       + '<span class="bb-cnt">'+d.cnt+' svc</span>'
