@@ -880,18 +880,17 @@ function selPeriodoSocios(p, el){
     document.getElementById('fechaInput').value = fechaSel;
     cargarDatos(true);
   } else if(p === 'semana'){
-    // Lunes de la semana actual → hoy
+    // Lunes de la semana actual → hoy — use local date to avoid UTC-offset bug
     var hoyS = new Date();
-    var dow = hoyS.getDay(); // 0=dom, 1=lun ... 6=sab
+    var dow = hoyS.getDay();
     var lunes = new Date(hoyS);
-    lunes.setDate(hoyS.getDate() - (dow === 0 ? 6 : dow - 1)); // retroceder al lunes
-    lunes.setHours(0,0,0,0);
-    cargarRangoSocios(lunes.toISOString().slice(0,10), hoyS.toISOString().slice(0,10), 'semana');
+    lunes.setDate(hoyS.getDate() - (dow === 0 ? 6 : dow - 1));
+    var lunesStr = lunes.getFullYear()+'-'+String(lunes.getMonth()+1).padStart(2,'0')+'-'+String(lunes.getDate()).padStart(2,'0');
+    cargarRangoSocios(lunesStr, fechaHoy(), 'semana');
   } else if(p === 'mes'){
     var ahora = new Date();
     var desde2 = ahora.getFullYear()+'-'+String(ahora.getMonth()+1).padStart(2,'0')+'-01';
-    var hasta2  = ahora.toISOString().slice(0,10);
-    cargarRangoSocios(desde2, hasta2);
+    cargarRangoSocios(desde2, fechaHoy());
   }
 }
 function aplicarRangoSocios(){
@@ -1155,6 +1154,11 @@ function iniciarAutoRefresh() {
       if(fill) fill.style.width = '0%';
       if(ctxt) ctxt.textContent = INTERVALO + 's';
       if (fechaSel === fechaHoy()) cargarDatos(false);
+      else if(periodoSociosActual && periodoSociosActual !== 'hoy') {
+        // Re-run period so "Esta semana" / "Este mes" stay live
+        var btn = document.querySelector('.btn-hoy.on');
+        if(btn) selPeriodoSocios(periodoSociosActual, btn);
+      }
     }
   }, 1000);
 }
