@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard Socios · Salon Men Saúl Fino</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
   --bg:#f5f4f0; --surface:#fff; --surface2:#f9f8f5;
@@ -14,8 +15,8 @@
   --err:#c0392b; --err-soft:#fcebeb;
   --gold:#c9a84c; --gold-soft:#fef9e7;
   --r:6px; --rl:10px;
-  --mono:'Consolas','Courier New',monospace;
-  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+  --mono:'DM Mono','Consolas','Courier New',monospace;
+  --sans:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
@@ -67,7 +68,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:12px;display:flex;align-items:center;gap:8px}
 .section-title::after{content:'';flex:1;height:1px;background:var(--border)}
 /* BARBERO CARDS */
-.bb-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+.bb-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}
 .bb-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);overflow:hidden}
 .bb-head{background:var(--text);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center}
 .bb-name{font-weight:700;font-size:14px}
@@ -304,7 +305,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
     <div class="bb-grid" id="bbGrid">
       <div class="bb-card"><div class="bb-head"><span class="bb-name">Didian</span></div><div class="bb-body"><div class="skel" style="height:14px;margin:5px 0"></div><div class="skel" style="height:14px;margin:5px 0"></div></div></div>
       <div class="bb-card"><div class="bb-head"><span class="bb-name">Emerson</span></div><div class="bb-body"><div class="skel" style="height:14px;margin:5px 0"></div><div class="skel" style="height:14px;margin:5px 0"></div></div></div>
-      <div class="bb-card"><div class="bb-head"><span class="bb-name">David</span></div><div class="bb-body"><div class="skel" style="height:14px;margin:5px 0"></div><div class="skel" style="height:14px;margin:5px 0"></div></div></div>
       <div class="bb-card"><div class="bb-head"><span class="bb-name">Samuel</span></div><div class="bb-body"><div class="skel" style="height:14px;margin:5px 0"></div><div class="skel" style="height:14px;margin:5px 0"></div></div></div>
     </div>
   </div>
