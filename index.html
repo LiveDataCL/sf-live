@@ -691,8 +691,7 @@ function renderAnalisis(metricas){
 var SILLAS_BARBS = [
   {id:'b1', nom:'Didian'},
   {id:'b2', nom:'Emerson'},
-  {id:'b3', nom:'Samuel'},
-  {id:'b4', nom:'David'}
+  {id:'b3', nom:'Samuel'}
 ];
 var _sillasBarberos = {}; // from /queue/control  → j.barberos
 var _sillasHorarios = {}; // from /horarios/fecha → keyed by bid
@@ -1030,10 +1029,10 @@ function kpi(lbl, val, cls, sub) {
     + '<div class="kpi-val'+(cls?' '+cls:'')+'">'+val+'</div>'
     + '<div class="kpi-sub">'+sub+'</div></div>';
 }
-var BB_BID = {Didian:'b1', Emerson:'b2', Samuel:'b3', David:'b4'};
+var BB_BID = {Didian:'b1', Emerson:'b2', Samuel:'b3'};
 
 function renderBarberos(porBB) {
-  var BARBEROS = ['Didian', 'Emerson', 'Samuel', 'David'];
+  var BARBEROS = ['Didian', 'Emerson', 'Samuel'];
   var maxTot = 0;
   BARBEROS.forEach(function(b) { if (porBB[b] && porBB[b].tot > maxTot) maxTot = porBB[b].tot; });
   var h = '';
