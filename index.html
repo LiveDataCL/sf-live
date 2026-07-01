@@ -693,7 +693,7 @@ var SILLAS_BARBS = [
   {id:'b2', nom:'Emerson'},
   {id:'b3', nom:'Samuel'},
   {id:'b5', nom:'Steven'}
-];
+]; // refreshed from GET /barberos by the loadBB IIFE below BB_BID
 var _sillasBarberos = {}; // from /queue/control  → j.barberos
 var _sillasHorarios = {}; // from /horarios/fecha → keyed by bid
 var _sillasTick     = null;
@@ -1031,9 +1031,24 @@ function kpi(lbl, val, cls, sub) {
     + '<div class="kpi-sub">'+sub+'</div></div>';
 }
 var BB_BID = {Didian:'b1', Emerson:'b2', Samuel:'b3', Steven:'b5'};
+var _sfBarberos = ['Didian','Emerson','Samuel','Steven']; // refreshed from API
+(function(){
+  fetch('https://barberpilot-api-production.up.railway.app/barberos')
+    .then(function(r){return r.json();})
+    .then(function(list){
+      BB_BID={};
+      _sfBarberos=[];
+      list.forEach(function(b){
+        BB_BID[b.nombre]=b.bid;
+        _sfBarberos.push(b.nombre);
+      });
+      // Also update SILLAS_BARBS
+      SILLAS_BARBS=list.map(function(b){return{id:b.bid,nom:b.nombre};});
+    }).catch(function(){});
+})();
 
 function renderBarberos(porBB) {
-  var BARBEROS = ['Didian', 'Emerson', 'Samuel', 'Steven'];
+  var BARBEROS = _sfBarberos;
   var maxTot = 0;
   BARBEROS.forEach(function(b) { if (porBB[b] && porBB[b].tot > maxTot) maxTot = porBB[b].tot; });
   var h = '';
