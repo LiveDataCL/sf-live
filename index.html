@@ -719,7 +719,7 @@ function _sillasHoy(){
 function cargarSillas(){
   var hoy = _sillasHoy();
   Promise.all([
-    fetch(API_URL + '/queue/control',{headers:{'x-dashboard-token':getSfLiveToken()}}).then(function(r){ if(r.status===401){showTokenOverlay();return {ok:false};} return r.json(); }).catch(function(){ return {ok:false}; }),
+    fetch(API_URL + '/queue/control',{headers:{'x-dashboard-token':getSfLiveToken()}}).then(function(r){ if(r.status===401){sessionStorage.removeItem('sfLiveToken');showTokenOverlay();return {ok:false};} return r.json(); }).catch(function(){ return {ok:false}; }),
     fetch(API_URL + '/horarios/' + hoy).then(function(r){ return r.json(); }).catch(function(){ return {ok:false}; })
   ]).then(function(res){
     var queue = res[0], hor = res[1];
