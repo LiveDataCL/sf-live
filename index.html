@@ -194,6 +194,17 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 @keyframes blink-amarillo{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(255,193,7,.7)}60%{opacity:.6;box-shadow:0 0 0 5px rgba(255,193,7,0)}}
 .silla-crono{font-family:var(--mono);font-size:11px;font-weight:700;color:#ffe082}
 .silla-espera{padding:1px 6px;border-radius:20px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.75);font-size:10px;font-weight:600;font-family:var(--mono);white-space:nowrap}
+/* ── TOKEN OVERLAY ──────────────────────────────────────────── */
+.tok-ov{position:fixed;inset:0;background:rgba(26,25,22,.82);z-index:9999;display:none;align-items:center;justify-content:center;padding:24px}
+.tok-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px 28px 24px;width:100%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+.tok-logo{width:44px;height:44px;border-radius:50%;background:var(--text);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--gold);letter-spacing:.04em}
+.tok-title{text-align:center;font-size:16px;font-weight:700;color:var(--text);margin-bottom:3px}
+.tok-sub{text-align:center;font-size:12px;color:var(--text3);margin-bottom:20px}
+.tok-input{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r);font-size:14px;font-family:var(--mono);background:var(--surface);color:var(--text);outline:none;transition:border-color .15s;box-sizing:border-box}
+.tok-input:focus{border-color:var(--gold)}
+.tok-btn{width:100%;padding:12px;margin-top:12px;background:var(--text);color:#fff;border:none;border-radius:var(--r);font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;transition:opacity .15s}
+.tok-btn:hover{opacity:.85}
+.tok-err{font-size:12px;color:var(--err);text-align:center;margin-top:8px;min-height:18px}
 </style>
 </head>
 <body>
@@ -708,7 +719,7 @@ function _sillasHoy(){
 function cargarSillas(){
   var hoy = _sillasHoy();
   Promise.all([
-    fetch(API_URL + '/queue/control').then(function(r){ return r.json(); }).catch(function(){ return {ok:false}; }),
+    fetch(API_URL + '/queue/control',{headers:{'x-dashboard-token':getSfLiveToken()}}).then(function(r){ if(r.status===401){showTokenOverlay();return {ok:false};} return r.json(); }).catch(function(){ return {ok:false}; }),
     fetch(API_URL + '/horarios/' + hoy).then(function(r){ return r.json(); }).catch(function(){ return {ok:false}; })
   ]).then(function(res){
     var queue = res[0], hor = res[1];
@@ -784,6 +795,7 @@ function iniciarSillas(){
 
 // ═══ INIT ════════════════════════════════════════════════
 function init() {
+  if(!getSfLiveToken()){showTokenOverlay();return;}
   document.getElementById('configBanner').classList.add('hidden');
   try {
     var savedUrl = localStorage.getItem('sfsf_api_url') || localStorage.getItem('sfsf_socios_url') || '';
@@ -1191,7 +1203,28 @@ function toast(msg) {
   el.classList.add('on');
   setTimeout(function() { el.classList.remove('on'); }, 2500);
 }
+function getSfLiveToken(){return sessionStorage.getItem('sfLiveToken')||'';}
+function showTokenOverlay(){document.getElementById('tokenOverlay').style.display='flex';}
+function hideTokenOverlay(){document.getElementById('tokenOverlay').style.display='none';}
+function submitToken(){
+  var t=(document.getElementById('tokenInput').value||'').trim();
+  if(!t){document.getElementById('tokenErr').textContent='Ingresa el token de acceso';return;}
+  document.getElementById('tokenErr').textContent='';
+  sessionStorage.setItem('sfLiveToken',t);
+  hideTokenOverlay();
+  init();
+}
 init();
 </script>
+<div class="tok-ov" id="tokenOverlay">
+  <div class="tok-card">
+    <div class="tok-logo">SF</div>
+    <div class="tok-title">Dashboard Socios</div>
+    <div class="tok-sub">Salon Men Saúl Fino · Token de acceso</div>
+    <input class="tok-input" id="tokenInput" type="password" placeholder="Token de acceso" autocomplete="off">
+    <div class="tok-err" id="tokenErr"></div>
+    <button class="tok-btn" onclick="submitToken()">Acceder</button>
+  </div>
+</div>
 </body>
 </html>
