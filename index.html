@@ -1214,7 +1214,11 @@ function submitToken(){
   hideTokenOverlay();
   init();
 }
-init();
+if(document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
 </script>
 <div class="tok-ov" id="tokenOverlay">
   <div class="tok-card">
