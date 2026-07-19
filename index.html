@@ -364,20 +364,34 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 </div>
 <div class="toast" id="toastel"></div>
 <script>
-// ── PLAN DE FACTURACIÓN — sincronizado con barberpilot-control ──
-var PLAN_S_BARBERIA = [
-  6500000, 8000000, 9500000, 11500000,
-  13500000, 15500000, 17000000, 19000000,
-  17000000, 18500000, 20000000, 21500000
-];
-var PLAN_BASE_AÑO = 2026, PLAN_BASE_MES_IDX = 4; // Mayo=4 (0-based)
+// ── META DEL SERVIDOR — GET /config/negocio/publico ─────────────────────────
+// Snapshot congelado al 2026-07-19 — activo sólo hasta que
+// cargarMetaDelServidor() responda con éxito (red caída / API offline).
+var _sfMetasFallback = {'2026-05':7150000,'2026-06':8014600,'2026-07':8014600};
+var _sfMetas = Object.assign({}, _sfMetasFallback);
+var _sfTasaCrecimiento = 0.1;
 
 function metaPlanParaPeriodo(periodo){ // periodo = 'YYYY-MM'
-  var p = periodo.split('-');
-  var y = parseInt(p[0]), m = parseInt(p[1])-1;
-  var idx = (y-PLAN_BASE_AÑO)*12 + (m-PLAN_BASE_MES_IDX);
-  idx = Math.max(0, Math.min(idx, PLAN_S_BARBERIA.length-1));
-  return PLAN_S_BARBERIA[idx];
+  if(_sfMetas[periodo] !== undefined) return _sfMetas[periodo];
+  var claves = Object.keys(_sfMetas).sort();
+  if(!claves.length) return 0;
+  var ultimo = claves[claves.length - 1];
+  var baseVal = _sfMetas[ultimo];
+  var p0 = ultimo.split('-'), p1 = periodo.split('-');
+  var meses = (parseInt(p1[0]) - parseInt(p0[0])) * 12 + (parseInt(p1[1]) - parseInt(p0[1]));
+  if(meses <= 0) return baseVal;
+  return Math.round(baseVal * Math.pow(1 + _sfTasaCrecimiento, meses));
+}
+
+function cargarMetaDelServidor(){
+  fetch(API_URL + '/config/negocio/publico?tenant=saulfino')
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(json){
+      if(!json.ok || !json.meta || !json.meta.historial_metas) throw new Error('inesperado');
+      _sfMetas = json.meta.historial_metas;
+      _sfTasaCrecimiento = json.meta.tasa_crecimiento || 0.1;
+    })
+    .catch(function(){});
 }
 
 var API_URL   = 'https://barberpilot-api-production.up.railway.app';
@@ -838,6 +852,7 @@ function init() {
     var ds = document.getElementById('sociosDesde'); if(ds) ds.value = hace30.toISOString().slice(0,10);
     var hs = document.getElementById('sociosHasta'); if(hs) hs.value = hoy;
   }catch(e){}
+  cargarMetaDelServidor();
   cargarDatos(false);
   iniciarAutoRefresh();
   cargarResumenMes();
