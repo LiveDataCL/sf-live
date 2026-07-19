@@ -336,7 +336,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
     <div class="bb-grid" id="bbGrid">
       <div class="bb-card"><div class="bb-head"><span class="bb-name">Didian</span></div><div class="bb-body"><div class="skel" style="height:14px;margin:5px 0"></div><div class="skel" style="height:14px;margin:5px 0"></div></div></div>
       <div class="bb-card"><div class="bb-head"><span class="bb-name">Emerson</span></div><div class="bb-body"><div class="skel" style="height:14px;margin:5px 0"></div><div class="skel" style="height:14px;margin:5px 0"></div></div></div>
-      <div class="bb-card"><div class="bb-head"><span class="bb-name">Samuel</span></div><div class="bb-body"><div class="skel" style="height:14px;margin:5px 0"></div><div class="skel" style="height:14px;margin:5px 0"></div></div></div>
+      <div class="bb-card"><div class="bb-head"><span class="bb-name">Winder</span></div><div class="bb-body"><div class="skel" style="height:14px;margin:5px 0"></div><div class="skel" style="height:14px;margin:5px 0"></div></div></div>
     </div>
   </div>
   <!-- CHARTS -->
@@ -722,8 +722,8 @@ function renderAnalisis(metricas){
 var SILLAS_BARBS = [
   {id:'b1', nom:'Didian'},
   {id:'b2', nom:'Emerson'},
-  {id:'b3', nom:'Samuel'},
-  {id:'b5', nom:'Steven'}
+  {id:'b5', nom:'Steven'},
+  {id:'b6', nom:'Winder'}
 ]; // refreshed from GET /barberos by the loadBB IIFE below BB_BID
 var _sillasBarberos = {}; // from /queue/control  → j.barberos
 var _sillasHorarios = {}; // from /horarios/fecha → keyed by bid
@@ -1063,8 +1063,8 @@ function kpi(lbl, val, cls, sub) {
     + '<div class="kpi-val'+(cls?' '+cls:'')+'">'+val+'</div>'
     + '<div class="kpi-sub">'+sub+'</div></div>';
 }
-var BB_BID = {Didian:'b1', Emerson:'b2', Samuel:'b3', Steven:'b5'};
-var _sfBarberos = ['Didian','Emerson','Samuel','Steven']; // refreshed from API
+var BB_BID = {Didian:'b1', Emerson:'b2', Steven:'b5', Winder:'b6'};
+var _sfBarberos = ['Didian','Emerson','Steven','Winder']; // refreshed from API
 (function(){
   fetch('https://barberpilot-api-production.up.railway.app/barberos')
     .then(function(r){return r.json();})
