@@ -423,6 +423,13 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
           <tbody id="rfTableBody"></tbody>
         </table>
       </div>
+      <div class="rf-chart-card" style="overflow-x:auto">
+        <div class="chart-title">Detalle de Gastos del Mes</div>
+        <table class="rf-table" id="rfGastosDetalle">
+          <thead><tr><th>Fecha</th><th>Hora</th><th style="text-align:left">Descripción</th><th>Monto</th></tr></thead>
+          <tbody id="rfGastosDetalleBody"></tbody>
+        </table>
+      </div>
     </div>
   </div><!-- /vistaFinanciero -->
 </div>
@@ -953,6 +960,35 @@ function rfHoySantiago() {
 }
 function rfPrimerDiaMes(fechaYMD) { return fechaYMD.slice(0, 8) + '01'; }
 
+// Feriados de Chile 2026 — lista fija, curada a mano contra el calendario
+// oficial público. NO se actualiza sola: hay que revisar y actualizar esta
+// lista para 2027 en adelante. Se evaluó reutilizar la tabla `feriados` que
+// ya existe en barberpilot-api (usada por GET /config/negocio) en vez de
+// una lista fija, pero ese endpoint exige auth de panel/barbero
+// (requireConfigNegocioAuth) — incompatible con el JWT de socio que usa
+// sf-live — y trae consigo servicios/productos/meta que este componente no
+// necesita. Agregar un endpoint nuevo solo para esto es un salto de
+// alcance mayor al de esta refinación visual, así que se usa la lista fija.
+var FERIADOS_CHILE_2026 = [
+  '2026-08-15', '2026-09-18', '2026-09-19', '2026-10-12',
+  '2026-10-31', '2026-11-01', '2026-12-08', '2026-12-25'
+];
+
+function rfEsDomingo(fechaYMD) {
+  return new Date(fechaYMD + 'T12:00:00').getDay() === 0;
+}
+
+// Advertencia pasiva únicamente — no bloquea el render ni cambia ningún
+// otro comportamiento. FERIADOS_CHILE_2026 necesita revisión y
+// actualización manual cada año; esto solo deja rastro visible en devtools
+// si alguien sigue usando esta lista en un año distinto a 2026.
+function rfVerificarAnioFeriados(hoyYMD) {
+  var anio = hoyYMD.slice(0, 4);
+  if (anio !== '2026') {
+    console.warn('FERIADOS_CHILE_2026 está desactualizado para este año (' + anio + ') — actualizar la lista');
+  }
+}
+
 // fetch con timeout de 4s + 1 reintento. No hay un envoltorio reutilizable
 // exacto en el proyecto para esto — dashboard_kpis_barberia.html (en
 // barberpilot-control) usa un timeout de 4s como constante suelta, sin
@@ -1022,6 +1058,7 @@ document.addEventListener('visibilitychange', function(){
 // rango del mes — nunca un loop día por día.
 async function cargarReporteFinanciero() {
   var hoy = rfHoySantiago();
+  rfVerificarAnioFeriados(hoy);
   var desde = rfPrimerDiaMes(hoy);
   document.getElementById('rfPeriodo').textContent = desde + ' → ' + hoy;
 
@@ -1055,7 +1092,7 @@ async function cargarReporteFinanciero() {
       + (_rfUltimoOk ? ' — mostrando la última carga exitosa (' + _rfUltimoOk.ts + ')' : '')
       + '</span><button onclick="cargarReporteFinanciero()" style="background:none;border:1px solid currentColor;border-radius:4px;padding:3px 10px;cursor:pointer;color:inherit;font-size:11px">Reintentar</button>';
     if (!_rfUltimoOk) return; // nunca hubo una carga buena — no hay nada que renderizar todavía
-    rfRenderTodo(_rfUltimoOk.dias);
+    rfRenderTodo(_rfUltimoOk.dias, _rfUltimoOk.gastos);
     return;
   }
   errBanner.style.display = 'none';
@@ -1068,8 +1105,8 @@ async function cargarReporteFinanciero() {
   }
 
   var dias = rfAgruparPorDia(regs, gastos, desde, hoy);
-  _rfUltimoOk = { dias: dias, desde: desde, hasta: hoy, gastosOk: gastosOk, ts: new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}) };
-  rfRenderTodo(dias);
+  _rfUltimoOk = { dias: dias, gastos: gastos, desde: desde, hasta: hoy, gastosOk: gastosOk, ts: new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}) };
+  rfRenderTodo(dias, gastos);
 }
 
 // Agrupa registros+gastos por día. Incluye TODOS los días del rango aunque
@@ -1103,7 +1140,7 @@ function rfAgruparPorDia(regs, gastos, desde, hasta) {
 // Calcula utilidad diaria/acumulada con la fórmula dual (negocio-gastos y,
 // por separado, (precio-bb)-gastos), muestra el banner de advertencia si
 // difieren más de $1, y arma la tabla + los puntos para el gráfico.
-function rfRenderTodo(dias) {
+function rfRenderTodo(dias, gastos) {
   var accFact = 0, accNeg = 0, accGastos = 0, accUtilA = 0, accUtilB = 0;
   var puntos = [];
   var filas = '';
@@ -1117,14 +1154,34 @@ function rfRenderTodo(dias) {
     accUtilB += utilDiaB;
     puntos.push({ fecha: dd.fecha, fact: accFact, neg: accNeg, gastos: accGastos });
     var diaLbl = dd.fecha.slice(8,10) + '/' + dd.fecha.slice(5,7);
-    filas += '<tr>'
-      + '<td>' + diaLbl + '</td>'
-      + '<td>$' + fmt(dd.facturacion) + '</td>'
-      + '<td>$' + fmt(dd.negocio) + '</td>'
-      + '<td>$' + fmt(dd.gastos) + '</td>'
-      + '<td class="' + (utilDiaA >= 0 ? 'pos' : 'neg') + '">' + (utilDiaA < 0 ? '−' : '') + '$' + fmt(Math.abs(utilDiaA)) + '</td>'
-      + '<td class="' + (accUtilA >= 0 ? 'pos' : 'neg') + '">' + (accUtilA < 0 ? '−' : '') + '$' + fmt(Math.abs(accUtilA)) + '</td>'
-      + '</tr>';
+
+    // Domingo/Feriado SOLO quando el día no tuvo actividad real (Σprecio y
+    // Σgastos ambos cero) — si el local abrió igual un domingo/feriado, se
+    // muestran los números reales normalmente, nunca se ocultan. Un día de
+    // semana con cero real sigue mostrando $0 tal cual — es una señal real
+    // que el dueño quiere ver, no algo que camuflar.
+    var sinActividad = dd.facturacion === 0 && dd.gastos === 0;
+    var etiqueta = null;
+    if (sinActividad) {
+      if (rfEsDomingo(dd.fecha)) etiqueta = 'Domingo';
+      else if (FERIADOS_CHILE_2026.indexOf(dd.fecha) !== -1) etiqueta = 'Feriado';
+    }
+
+    if (etiqueta) {
+      filas += '<tr style="color:var(--text3);font-style:italic">'
+        + '<td>' + diaLbl + '</td>'
+        + '<td colspan="5" style="text-align:center">' + etiqueta + '</td>'
+        + '</tr>';
+    } else {
+      filas += '<tr>'
+        + '<td>' + diaLbl + '</td>'
+        + '<td>$' + fmt(dd.facturacion) + '</td>'
+        + '<td>$' + fmt(dd.negocio) + '</td>'
+        + '<td>$' + fmt(dd.gastos) + '</td>'
+        + '<td class="' + (utilDiaA >= 0 ? 'pos' : 'neg') + '">' + (utilDiaA < 0 ? '−' : '') + '$' + fmt(Math.abs(utilDiaA)) + '</td>'
+        + '<td class="' + (accUtilA >= 0 ? 'pos' : 'neg') + '">' + (accUtilA < 0 ? '−' : '') + '$' + fmt(Math.abs(accUtilA)) + '</td>'
+        + '</tr>';
+    }
   });
 
   var discrepancia = Math.abs(accUtilA - accUtilB);
@@ -1140,6 +1197,28 @@ function rfRenderTodo(dias) {
   document.getElementById('rfTableBody').innerHTML = filas || '<tr><td colspan="6" style="text-align:center;color:var(--text3)">Sin datos este mes</td></tr>';
 
   rfRenderChart(puntos);
+  rfRenderDetalleGastos(gastos || []);
+}
+
+// Detalle de gastos del mes, uno por fila — sale del mismo /gastos/rango ya
+// obtenido en cargarReporteFinanciero(), sin ninguna llamada nueva.
+function rfRenderDetalleGastos(gastos) {
+  var body = document.getElementById('rfGastosDetalleBody');
+  if (!body) return;
+  var ordenados = gastos.slice().sort(function(a, b){
+    if (a.fecha !== b.fecha) return a.fecha < b.fecha ? -1 : 1;
+    return (a.hora || '') < (b.hora || '') ? -1 : ((a.hora || '') > (b.hora || '') ? 1 : 0);
+  });
+  var filas = ordenados.map(function(g){
+    var diaLbl = g.fecha.slice(8,10) + '/' + g.fecha.slice(5,7);
+    return '<tr>'
+      + '<td>' + diaLbl + '</td>'
+      + '<td>' + (g.hora || '—') + '</td>'
+      + '<td style="text-align:left;font-family:var(--sans)">' + escHtml(g.desc_gasto || '') + '</td>'
+      + '<td>$' + fmt(g.monto) + '</td>'
+      + '</tr>';
+  }).join('');
+  body.innerHTML = filas || '<tr><td colspan="4" style="text-align:center;color:var(--text3)">Sin gastos este mes</td></tr>';
 }
 
 // Gráfico de línea acumulado, SVG nativo inline — no hay librería de
