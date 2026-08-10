@@ -978,6 +978,17 @@ function rfEsDomingo(fechaYMD) {
   return new Date(fechaYMD + 'T12:00:00').getDay() === 0;
 }
 
+// Advertencia pasiva únicamente — no bloquea el render ni cambia ningún
+// otro comportamiento. FERIADOS_CHILE_2026 necesita revisión y
+// actualización manual cada año; esto solo deja rastro visible en devtools
+// si alguien sigue usando esta lista en un año distinto a 2026.
+function rfVerificarAnioFeriados(hoyYMD) {
+  var anio = hoyYMD.slice(0, 4);
+  if (anio !== '2026') {
+    console.warn('FERIADOS_CHILE_2026 está desactualizado para este año (' + anio + ') — actualizar la lista');
+  }
+}
+
 // fetch con timeout de 4s + 1 reintento. No hay un envoltorio reutilizable
 // exacto en el proyecto para esto — dashboard_kpis_barberia.html (en
 // barberpilot-control) usa un timeout de 4s como constante suelta, sin
@@ -1047,6 +1058,7 @@ document.addEventListener('visibilitychange', function(){
 // rango del mes — nunca un loop día por día.
 async function cargarReporteFinanciero() {
   var hoy = rfHoySantiago();
+  rfVerificarAnioFeriados(hoy);
   var desde = rfPrimerDiaMes(hoy);
   document.getElementById('rfPeriodo').textContent = desde + ' → ' + hoy;
 
