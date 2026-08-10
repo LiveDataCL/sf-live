@@ -84,6 +84,31 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
 .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:15px}
 .chart-title{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:12px}
+/* REPORTE FINANCIERO — anexo mensual, peer de la vista Resumen */
+.vista-toggle{display:flex;gap:8px;margin-bottom:16px}
+.vtab{padding:8px 16px;border:1px solid var(--border);border-radius:20px;background:var(--surface);font-size:12px;font-weight:600;cursor:pointer;font-family:var(--sans);transition:all .12s}
+.vtab.on,.vtab:hover{background:var(--text);color:#fff;border-color:var(--text)}
+.rf-header{background:#0A0A08;border-radius:var(--rl);padding:18px 20px;margin-bottom:18px}
+.rf-header-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+.rf-title{color:var(--gold);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.rf-period{color:rgba(255,255,255,.55);font-size:11px;font-family:var(--mono)}
+.rf-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.rf-kpi{background:rgba(255,255,255,.04);border:1px solid rgba(201,168,76,.25);border-radius:var(--r);padding:12px 14px}
+.rf-kpi-lbl{font-size:10px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.rf-kpi-val{font-size:22px;font-weight:700;font-family:var(--mono);color:#fff}
+.rf-kpi-val.pos{color:#4caf50}
+.rf-kpi-val.neg{color:#e05a4e}
+.rf-warning{background:var(--warn-soft);border:1px solid rgba(139,94,0,.3);color:var(--warn);border-radius:var(--r);padding:10px 14px;font-size:12px;font-weight:600;margin-top:12px;display:flex;align-items:center;gap:8px}
+.rf-body{background:var(--bg)}
+.rf-error-banner{background:var(--err-soft);border:1px solid rgba(192,57,43,.3);color:var(--err);border-radius:var(--r);padding:10px 14px;font-size:12px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.rf-info-banner{background:var(--info-soft);border:1px solid rgba(26,75,139,.25);color:var(--info);border-radius:var(--r);padding:10px 14px;font-size:12px;margin-bottom:14px}
+.rf-chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:16px 18px;margin-bottom:18px}
+.rf-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.rf-table th{text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);padding:8px 10px;border-bottom:1px solid var(--border)}
+.rf-table th:first-child{text-align:left}
+.rf-table td{text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);font-family:var(--mono)}
+.rf-table td:first-child{text-align:left;font-family:var(--sans)}
+.rf-table td.pos{color:var(--ok)} .rf-table td.neg{color:var(--err)}
 /* PAGO PILLS */
 .pago-grid{display:flex;gap:8px;flex-direction:column}
 .pago-item{display:flex;align-items:center;gap:10px;font-size:12px}
@@ -258,6 +283,12 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   </div>
 </div>
 <div class="main">
+  <!-- Vista: Resumen (existente) es peer de Reporte Financiero (nuevo anexo) -->
+  <div class="vista-toggle">
+    <button class="vtab on" id="vtabResumen" onclick="cambiarVista('resumen')">Resumen</button>
+    <button class="vtab" id="vtabFinanciero" onclick="cambiarVista('financiero')">📊 Reporte Financiero</button>
+  </div>
+  <div id="vistaResumen">
   <!-- FECHA -->
   <div class="fecha-bar">
     <button class="btn-hoy on" id="btnPeriodoHoy"   onclick="selPeriodoSocios('hoy',this)">Hoy</button>
@@ -361,6 +392,39 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       <div class="gastos-list" id="gastosList"><div class="empty">Sin gastos</div></div>
     </div>
   </div>
+  </div><!-- /vistaResumen -->
+
+  <!-- REPORTE FINANCIERO — anexo, mes actual únicamente (día 1 → hoy) -->
+  <div id="vistaFinanciero" style="display:none">
+    <div class="rf-header">
+      <div class="rf-header-top">
+        <span class="rf-title">Reporte Financiero · Mes Actual</span>
+        <span class="rf-period" id="rfPeriodo">—</span>
+      </div>
+      <div class="rf-kpi-grid" id="rfKpiGrid">
+        <div class="rf-kpi"><div class="rf-kpi-lbl">Facturación acumulada</div><div class="rf-kpi-val" id="rfKpiFact">—</div></div>
+        <div class="rf-kpi"><div class="rf-kpi-lbl">Ingreso negocio acumulado</div><div class="rf-kpi-val" id="rfKpiNeg">—</div></div>
+        <div class="rf-kpi"><div class="rf-kpi-lbl">Gastos acumulados</div><div class="rf-kpi-val" id="rfKpiGastos">—</div></div>
+        <div class="rf-kpi"><div class="rf-kpi-lbl">Utilidad acumulada</div><div class="rf-kpi-val" id="rfKpiUtilidad">—</div></div>
+      </div>
+      <div class="rf-warning" id="rfWarning" style="display:none">⚠ Advertencia de integridad de datos — los dos cálculos de utilidad no coinciden. Contacta a soporte técnico.</div>
+    </div>
+    <div class="rf-body">
+      <div class="rf-error-banner" id="rfErrorBanner" style="display:none"></div>
+      <div class="rf-info-banner" id="rfInfoBanner" style="display:none"></div>
+      <div class="rf-chart-card">
+        <div class="chart-title">Acumulado del mes</div>
+        <div id="rfChartWrap"></div>
+      </div>
+      <div class="rf-chart-card" style="overflow-x:auto">
+        <div class="chart-title">Detalle diario</div>
+        <table class="rf-table" id="rfTable">
+          <thead><tr><th>Día</th><th>Facturación</th><th>Negocio (50%)</th><th>Gastos</th><th>Utilidad del día</th><th>Utilidad acumulada</th></tr></thead>
+          <tbody id="rfTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div><!-- /vistaFinanciero -->
 </div>
 <div class="toast" id="toastel"></div>
 <script>
@@ -866,6 +930,260 @@ function fechaHoy() {
 }
 function fmt(n) { return Math.round(n).toLocaleString('es-CL'); }
 function fmtK(n) { return n >= 1000000 ? '$'+(n/1000000).toFixed(1)+'M' : n >= 1000 ? '$'+Math.round(n/1000)+'K' : '$'+Math.round(n); }
+
+// ═══ REPORTE FINANCIERO — anexo mensual, solo mes actual ═══════════════
+// Peer de la vista Resumen, no la reemplaza. Rango siempre dinámico:
+// [día 1 del mes actual, hoy], calculado en America/Santiago (nunca según
+// la zona horaria del navegador del socio). Sin selector de mes histórico
+// a propósito — el registro de gastos recién se volvió consistente desde
+// agosto 2026, así que reportar meses anteriores daría cifras engañosas.
+var _rfInterval = null;
+var _rfUltimoOk = null; // última carga exitosa: {dias,desde,hasta,gastosOk,ts}
+
+// "Hoy" en America/Santiago como 'YYYY-MM-DD', sin depender de la zona
+// horaria del navegador del socio (no existía ningún helper de timezone
+// explícito en este archivo — fechaHoy() usa new Date() local sin más).
+function rfHoySantiago() {
+  var parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date());
+  var m = {};
+  parts.forEach(function(p){ m[p.type] = p.value; });
+  return m.year + '-' + m.month + '-' + m.day;
+}
+function rfPrimerDiaMes(fechaYMD) { return fechaYMD.slice(0, 8) + '01'; }
+
+// fetch con timeout de 4s + 1 reintento. No hay un envoltorio reutilizable
+// exacto en el proyecto para esto — dashboard_kpis_barberia.html (en
+// barberpilot-control) usa un timeout de 4s como constante suelta, sin
+// función reutilizable — así que este helper es nuevo, usando ese mismo
+// valor de 4s como referencia.
+function rfFetchConReintento(url, headers, intentos) {
+  intentos = intentos || 2;
+  return new Promise(function(resolve, reject) {
+    function intentar(restantes) {
+      var controller = new AbortController();
+      var to = setTimeout(function(){ controller.abort(); }, 4000);
+      fetch(url, { headers: headers, signal: controller.signal })
+        .then(function(r){ clearTimeout(to); return r.json(); })
+        .then(resolve)
+        .catch(function(err){
+          clearTimeout(to);
+          if (restantes > 1) intentar(restantes - 1);
+          else reject(err);
+        });
+    }
+    intentar(intentos);
+  });
+}
+
+// Alterna entre la vista Resumen (existente, sin tocar) y el nuevo anexo
+// Reporte Financiero — reutiliza el único patrón de mostrar/ocultar que ya
+// existía en este archivo (login-view/active), no se inventa uno nuevo.
+function cambiarVista(v) {
+  var esFinanciero = v === 'financiero';
+  document.getElementById('vistaResumen').style.display = esFinanciero ? 'none' : '';
+  document.getElementById('vistaFinanciero').style.display = esFinanciero ? '' : 'none';
+  document.getElementById('vtabResumen').classList.toggle('on', !esFinanciero);
+  document.getElementById('vtabFinanciero').classList.toggle('on', esFinanciero);
+  if (esFinanciero) {
+    cargarReporteFinanciero();
+    rfIniciarAutoRefresh();
+  } else {
+    rfDetenerAutoRefresh();
+  }
+}
+
+function rfIniciarAutoRefresh() {
+  rfDetenerAutoRefresh();
+  _rfInterval = setInterval(function(){
+    if (document.visibilityState === 'visible') cargarReporteFinanciero();
+  }, 5 * 60 * 1000);
+}
+function rfDetenerAutoRefresh() {
+  if (_rfInterval) { clearInterval(_rfInterval); _rfInterval = null; }
+}
+// Page Visibility API — pausa el polling si el socio cambia de pestaña del
+// navegador mientras el Reporte Financiero está abierto, y refresca de
+// inmediato al volver.
+document.addEventListener('visibilitychange', function(){
+  var vf = document.getElementById('vistaFinanciero');
+  var abierta = vf && vf.style.display !== 'none';
+  if (!abierta) return;
+  if (document.visibilityState === 'visible') {
+    cargarReporteFinanciero();
+    rfIniciarAutoRefresh();
+  } else {
+    rfDetenerAutoRefresh();
+  }
+});
+
+// Un solo fetch a /registros/rango y uno a /gastos/rango para todo el
+// rango del mes — nunca un loop día por día.
+async function cargarReporteFinanciero() {
+  var hoy = rfHoySantiago();
+  var desde = rfPrimerDiaMes(hoy);
+  document.getElementById('rfPeriodo').textContent = desde + ' → ' + hoy;
+
+  var regsOk = true, gastosOk = true, regs = [], gastos = [];
+
+  try {
+    var jr = await rfFetchConReintento(API_URL + '/registros/rango?desde=' + desde + '&hasta=' + hoy, getAuthHeaders());
+    if (!jr || jr.ok !== true || !Array.isArray(jr.registros)) throw new Error('respuesta inválida');
+    regs = jr.registros;
+  } catch (e) {
+    regsOk = false;
+  }
+
+  try {
+    var jg = await rfFetchConReintento(API_URL + '/gastos/rango?desde=' + desde + '&hasta=' + hoy, getAuthHeaders());
+    if (!jg || jg.ok !== true || !Array.isArray(jg.gastos)) throw new Error('respuesta inválida');
+    gastos = jg.gastos;
+  } catch (e) {
+    gastosOk = false;
+  }
+
+  var errBanner = document.getElementById('rfErrorBanner');
+  var infoBanner = document.getElementById('rfInfoBanner');
+
+  if (!regsOk) {
+    // Sin registros no hay nada confiable que calcular. Si hubo una carga
+    // exitosa antes, se mantiene visible con su hora — nunca se muestran
+    // datos obsoletos sin marcar como tal.
+    errBanner.style.display = '';
+    errBanner.innerHTML = '<span>⚠ No se pudieron cargar los registros'
+      + (_rfUltimoOk ? ' — mostrando la última carga exitosa (' + _rfUltimoOk.ts + ')' : '')
+      + '</span><button onclick="cargarReporteFinanciero()" style="background:none;border:1px solid currentColor;border-radius:4px;padding:3px 10px;cursor:pointer;color:inherit;font-size:11px">Reintentar</button>';
+    if (!_rfUltimoOk) return; // nunca hubo una carga buena — no hay nada que renderizar todavía
+    rfRenderTodo(_rfUltimoOk.dias);
+    return;
+  }
+  errBanner.style.display = 'none';
+
+  if (!gastosOk) {
+    infoBanner.style.display = '';
+    infoBanner.textContent = 'Gastos no disponibles — mostrando solo ingresos';
+  } else {
+    infoBanner.style.display = 'none';
+  }
+
+  var dias = rfAgruparPorDia(regs, gastos, desde, hoy);
+  _rfUltimoOk = { dias: dias, desde: desde, hasta: hoy, gastosOk: gastosOk, ts: new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}) };
+  rfRenderTodo(dias);
+}
+
+// Agrupa registros+gastos por día. Incluye TODOS los días del rango aunque
+// no tengan datos, para que el acumulado y el gráfico no tengan huecos.
+// sumaPrecioMenosB es la pata B de la validación cruzada (ver rfRenderTodo).
+function rfAgruparPorDia(regs, gastos, desde, hasta) {
+  var porDia = {};
+  var d = new Date(desde + 'T12:00:00');
+  var fin = new Date(hasta + 'T12:00:00');
+  while (d <= fin) {
+    var ymd = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    porDia[ymd] = { fecha: ymd, facturacion: 0, negocio: 0, pagoBarberos: 0, gastos: 0, sumaPrecioMenosB: 0 };
+    d.setDate(d.getDate() + 1);
+  }
+  regs.forEach(function(r){
+    var f = porDia[r.fecha];
+    if (!f) return; // fuera de rango — no debería pasar, guard de seguridad
+    f.facturacion += r.precio;
+    f.negocio += r.neg;
+    f.pagoBarberos += r.bb + (r.propina || 0);
+    f.sumaPrecioMenosB += (r.precio - r.bb);
+  });
+  gastos.forEach(function(g){
+    var f = porDia[g.fecha];
+    if (!f) return;
+    f.gastos += g.monto;
+  });
+  return Object.keys(porDia).sort().map(function(k){ return porDia[k]; });
+}
+
+// Calcula utilidad diaria/acumulada con la fórmula dual (negocio-gastos y,
+// por separado, (precio-bb)-gastos), muestra el banner de advertencia si
+// difieren más de $1, y arma la tabla + los puntos para el gráfico.
+function rfRenderTodo(dias) {
+  var accFact = 0, accNeg = 0, accGastos = 0, accUtilA = 0, accUtilB = 0;
+  var puntos = [];
+  var filas = '';
+  dias.forEach(function(dd){
+    var utilDiaA = dd.negocio - dd.gastos;                  // fórmula primaria
+    var utilDiaB = dd.sumaPrecioMenosB - dd.gastos;          // validación cruzada
+    accFact += dd.facturacion;
+    accNeg += dd.negocio;
+    accGastos += dd.gastos;
+    accUtilA += utilDiaA;
+    accUtilB += utilDiaB;
+    puntos.push({ fecha: dd.fecha, fact: accFact, neg: accNeg, gastos: accGastos });
+    var diaLbl = dd.fecha.slice(8,10) + '/' + dd.fecha.slice(5,7);
+    filas += '<tr>'
+      + '<td>' + diaLbl + '</td>'
+      + '<td>$' + fmt(dd.facturacion) + '</td>'
+      + '<td>$' + fmt(dd.negocio) + '</td>'
+      + '<td>$' + fmt(dd.gastos) + '</td>'
+      + '<td class="' + (utilDiaA >= 0 ? 'pos' : 'neg') + '">' + (utilDiaA < 0 ? '−' : '') + '$' + fmt(Math.abs(utilDiaA)) + '</td>'
+      + '<td class="' + (accUtilA >= 0 ? 'pos' : 'neg') + '">' + (accUtilA < 0 ? '−' : '') + '$' + fmt(Math.abs(accUtilA)) + '</td>'
+      + '</tr>';
+  });
+
+  var discrepancia = Math.abs(accUtilA - accUtilB);
+  document.getElementById('rfWarning').style.display = discrepancia > 1 ? '' : 'none';
+
+  document.getElementById('rfKpiFact').textContent = '$' + fmt(accFact);
+  document.getElementById('rfKpiNeg').textContent = '$' + fmt(accNeg);
+  document.getElementById('rfKpiGastos').textContent = '$' + fmt(accGastos);
+  var kpiUtil = document.getElementById('rfKpiUtilidad');
+  kpiUtil.textContent = (accUtilA < 0 ? '−' : '') + '$' + fmt(Math.abs(accUtilA));
+  kpiUtil.className = 'rf-kpi-val ' + (accUtilA >= 0 ? 'pos' : 'neg');
+
+  document.getElementById('rfTableBody').innerHTML = filas || '<tr><td colspan="6" style="text-align:center;color:var(--text3)">Sin datos este mes</td></tr>';
+
+  rfRenderChart(puntos);
+}
+
+// Gráfico de línea acumulado, SVG nativo inline — no hay librería de
+// gráficos cargada en sf-live (cero <script src> en todo el archivo,
+// confirmado antes de escribir esto), así que no se agrega ninguna
+// dependencia nueva.
+function rfRenderChart(puntos) {
+  var wrap = document.getElementById('rfChartWrap');
+  if (!puntos.length) { wrap.innerHTML = '<div class="empty">Sin datos este mes</div>'; return; }
+  var W = 720, H = 220, PAD = 32;
+  var maxVal = Math.max(1, Math.max.apply(null, puntos.map(function(p){ return Math.max(p.fact, p.neg, p.gastos); })));
+  var stepX = puntos.length > 1 ? (W - PAD*2) / (puntos.length - 1) : 0;
+
+  function pathFor(key) {
+    return puntos.map(function(p, i){
+      var x = PAD + i * stepX;
+      var y = H - PAD - (p[key] / maxVal) * (H - PAD*2);
+      return (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1);
+    }).join(' ');
+  }
+
+  var series = [
+    { key: 'fact',   color: '#4a9fd4', label: 'Facturación bruta' },
+    { key: 'neg',    color: '#c9a84c', label: 'Ingreso negocio' },
+    { key: 'gastos', color: '#c0392b', label: 'Gastos' },
+  ];
+
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;max-height:260px">';
+  for (var g = 0; g <= 4; g++) {
+    var gy = PAD + g * ((H - PAD*2) / 4);
+    svg += '<line x1="' + PAD + '" y1="' + gy.toFixed(1) + '" x2="' + (W-PAD) + '" y2="' + gy.toFixed(1) + '" stroke="var(--border)" stroke-width="1"/>';
+  }
+  series.forEach(function(s){
+    svg += '<path d="' + pathFor(s.key) + '" fill="none" stroke="' + s.color + '" stroke-width="2.5"/>';
+  });
+  svg += '</svg>';
+
+  var leyenda = '<div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap">' + series.map(function(s){
+    return '<span style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:5px">'
+      + '<span style="width:10px;height:10px;border-radius:2px;background:' + s.color + ';display:inline-block"></span>' + s.label + '</span>';
+  }).join('') + '</div>';
+
+  wrap.innerHTML = svg + leyenda;
+}
 // ═══ URL CONFIG ══════════════════════════════════════════
 function guardarUrl() {
   var val = (document.getElementById('urlInput').value || '').trim();
