@@ -937,6 +937,16 @@ function fechaHoy() {
 }
 function fmt(n) { return Math.round(n).toLocaleString('es-CL'); }
 function fmtK(n) { return n >= 1000000 ? '$'+(n/1000000).toFixed(1)+'M' : n >= 1000 ? '$'+Math.round(n/1000)+'K' : '$'+Math.round(n); }
+// Bug real, reproducido ejecutando el script real en jsdom (no recalculando
+// a mano): rfRenderDetalleGastos() llamaba a escHtml(), que existe en
+// barberpilot-control/index.html pero nunca se definió en este archivo —
+// ReferenceError sin capturar que abortaba el render antes de poblar
+// rfGastosDetalleBody, dejando la tabla con encabezados pero cero filas.
+// Misma implementación que barberpilot-control, para mantener el mismo
+// comportamiento en ambos repos.
+function escHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 
 // ═══ REPORTE FINANCIERO — anexo mensual, solo mes actual ═══════════════
 // Peer de la vista Resumen, no la reemplaza. Rango siempre dinámico:
@@ -1152,7 +1162,7 @@ function rfRenderTodo(dias, gastos) {
     accGastos += dd.gastos;
     accUtilA += utilDiaA;
     accUtilB += utilDiaB;
-    puntos.push({ fecha: dd.fecha, fact: accFact, neg: accNeg, gastos: accGastos });
+    puntos.push({ fecha: dd.fecha, fact: accFact, neg: accNeg, gastos: accGastos, util: accUtilA });
     var diaLbl = dd.fecha.slice(8,10) + '/' + dd.fecha.slice(5,7);
 
     // Domingo/Feriado SOLO quando el día no tuvo actividad real (Σprecio y
@@ -1229,14 +1239,27 @@ function rfRenderChart(puntos) {
   var wrap = document.getElementById('rfChartWrap');
   if (!puntos.length) { wrap.innerHTML = '<div class="empty">Sin datos este mes</div>'; return; }
   var W = 720, H = 220, PAD = 32;
-  var maxVal = Math.max(1, Math.max.apply(null, puntos.map(function(p){ return Math.max(p.fact, p.neg, p.gastos); })));
+
+  // Escala: antes solo tomaba un máximo con mínimo IMPLÍCITO en 0 —
+  // correcto mientras las 3 series originales (fact/neg/gastos) son sumas
+  // acumuladas que nunca bajan de 0. Utilidad acumulada sí puede ser
+  // negativa, así que ahora se calcula también un mínimo real, con 0 como
+  // techo superior de ese mínimo — así la línea de referencia en cero
+  // siempre cae dentro del rango visible, incluso si la utilidad nunca
+  // cruza a negativo este mes (que es el caso real de agosto 2026).
+  var allVals = [];
+  puntos.forEach(function(p){ allVals.push(p.fact, p.neg, p.gastos, p.util); });
+  var maxVal = Math.max.apply(null, allVals);
+  var minVal = Math.min(0, Math.min.apply(null, allVals));
+  var range = Math.max(1, maxVal - minVal);
   var stepX = puntos.length > 1 ? (W - PAD*2) / (puntos.length - 1) : 0;
+
+  function valToY(v) { return H - PAD - ((v - minVal) / range) * (H - PAD*2); }
+  function xFor(i) { return PAD + i * stepX; }
 
   function pathFor(key) {
     return puntos.map(function(p, i){
-      var x = PAD + i * stepX;
-      var y = H - PAD - (p[key] / maxVal) * (H - PAD*2);
-      return (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1);
+      return (i === 0 ? 'M' : 'L') + xFor(i).toFixed(1) + ',' + valToY(p[key]).toFixed(1);
     }).join(' ');
   }
 
@@ -1245,21 +1268,55 @@ function rfRenderChart(puntos) {
     { key: 'neg',    color: '#c9a84c', label: 'Ingreso negocio' },
     { key: 'gastos', color: '#c0392b', label: 'Gastos' },
   ];
+  // Mismos colores que .rf-kpi-val.pos/.neg — el par pos/neg ya usado para
+  // "utilidad" específicamente en este archivo (la tarjeta KPI).
+  var UTIL_POS = '#4caf50', UTIL_NEG = '#e05a4e';
 
   var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;max-height:260px">';
+
   for (var g = 0; g <= 4; g++) {
     var gy = PAD + g * ((H - PAD*2) / 4);
     svg += '<line x1="' + PAD + '" y1="' + gy.toFixed(1) + '" x2="' + (W-PAD) + '" y2="' + gy.toFixed(1) + '" stroke="var(--border)" stroke-width="1"/>';
   }
+
+  // Línea de referencia en utilidad = 0 — el ancla visual: arriba de esta
+  // línea es ganancia, abajo es pérdida. minVal nunca es mayor que 0, así
+  // que esta línea siempre cae dentro del área visible del gráfico.
+  var y0 = valToY(0);
+  svg += '<line x1="' + PAD + '" y1="' + y0.toFixed(1) + '" x2="' + (W-PAD) + '" y2="' + y0.toFixed(1) + '" stroke="#9c9a93" stroke-width="1" stroke-dasharray="4,3"/>';
+
   series.forEach(function(s){
     svg += '<path d="' + pathFor(s.key) + '" fill="none" stroke="' + s.color + '" stroke-width="2.5"/>';
   });
+
+  // Utilidad acumulada: NO es un solo <path> de un color — cada segmento
+  // entre dos puntos consecutivos se colorea según su signo, y si cruza
+  // cero a mitad de camino se parte en el punto de cruce exacto
+  // (interpolado linealmente), nunca eligiendo un solo color para toda la
+  // línea en base al valor final del mes.
+  for (var i = 0; i < puntos.length - 1; i++) {
+    var v0 = puntos[i].util, v1 = puntos[i+1].util;
+    var x0 = xFor(i), x1 = xFor(i+1);
+    var yy0 = valToY(v0), yy1 = valToY(v1);
+    if ((v0 >= 0) === (v1 >= 0)) {
+      svg += '<line x1="' + x0.toFixed(1) + '" y1="' + yy0.toFixed(1) + '" x2="' + x1.toFixed(1) + '" y2="' + yy1.toFixed(1) + '" stroke="' + (v0 >= 0 ? UTIL_POS : UTIL_NEG) + '" stroke-width="2.5"/>';
+    } else {
+      var t = v0 / (v0 - v1); // fracción del segmento donde utilidad cruza 0
+      var xc = x0 + t * (x1 - x0);
+      svg += '<line x1="' + x0.toFixed(1) + '" y1="' + yy0.toFixed(1) + '" x2="' + xc.toFixed(1) + '" y2="' + y0.toFixed(1) + '" stroke="' + (v0 >= 0 ? UTIL_POS : UTIL_NEG) + '" stroke-width="2.5"/>';
+      svg += '<line x1="' + xc.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + x1.toFixed(1) + '" y2="' + yy1.toFixed(1) + '" stroke="' + (v1 >= 0 ? UTIL_POS : UTIL_NEG) + '" stroke-width="2.5"/>';
+    }
+  }
+
   svg += '</svg>';
 
-  var leyenda = '<div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap">' + series.map(function(s){
+  var leyendaItems = series.map(function(s){
     return '<span style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:5px">'
       + '<span style="width:10px;height:10px;border-radius:2px;background:' + s.color + ';display:inline-block"></span>' + s.label + '</span>';
-  }).join('') + '</div>';
+  });
+  leyendaItems.push('<span style="font-size:11px;color:var(--text2);display:flex;align-items:center;gap:5px">'
+    + '<span style="width:10px;height:10px;border-radius:2px;background:linear-gradient(90deg,' + UTIL_POS + ' 50%,' + UTIL_NEG + ' 50%);display:inline-block"></span>Utilidad acumulada</span>');
+  var leyenda = '<div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap">' + leyendaItems.join('') + '</div>';
 
   wrap.innerHTML = svg + leyenda;
 }
