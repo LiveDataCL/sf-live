@@ -103,6 +103,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 .rf-error-banner{background:var(--err-soft);border:1px solid rgba(192,57,43,.3);color:var(--err);border-radius:var(--r);padding:10px 14px;font-size:12px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px}
 .rf-info-banner{background:var(--info-soft);border:1px solid rgba(26,75,139,.25);color:var(--info);border-radius:var(--r);padding:10px 14px;font-size:12px;margin-bottom:14px}
 .rf-chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);padding:16px 18px;margin-bottom:18px}
+.rf-tooltip{position:absolute;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;font-size:11px;color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.15);pointer-events:none;z-index:20;white-space:nowrap}
+.rf-tooltip .rf-tt-fecha{font-weight:700;color:var(--text2);font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+.rf-tooltip .rf-tt-valor{font-family:var(--mono);font-weight:700;margin-top:2px}
 .rf-table{width:100%;border-collapse:collapse;font-size:12.5px}
 .rf-table th{text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);padding:8px 10px;border-bottom:1px solid var(--border)}
 .rf-table th:first-child{text-align:left}
@@ -412,9 +415,10 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
     <div class="rf-body">
       <div class="rf-error-banner" id="rfErrorBanner" style="display:none"></div>
       <div class="rf-info-banner" id="rfInfoBanner" style="display:none"></div>
-      <div class="rf-chart-card">
+      <div class="rf-chart-card" style="position:relative">
         <div class="chart-title">Acumulado del mes</div>
         <div id="rfChartWrap"></div>
+        <div id="rfTooltip" class="rf-tooltip" style="display:none"></div>
       </div>
       <div class="rf-chart-card" style="overflow-x:auto">
         <div class="chart-title">Detalle diario</div>
@@ -1252,10 +1256,32 @@ function rfRenderChart(puntos) {
   var maxVal = Math.max.apply(null, allVals);
   var minVal = Math.min(0, Math.min.apply(null, allVals));
   var range = Math.max(1, maxVal - minVal);
-  var stepX = puntos.length > 1 ? (W - PAD*2) / (puntos.length - 1) : 0;
 
-  function valToY(v) { return H - PAD - ((v - minVal) / range) * (H - PAD*2); }
-  function xFor(i) { return PAD + i * stepX; }
+  // Márgenes: PAD (arriba/derecha) sin cambios. PADL (izquierda) y PADB
+  // (abajo) son nuevos, dimensionados solo lo necesario para las etiquetas
+  // de eje que se agregan en esta revisión — antes no existían y PAD=32
+  // alcanzaba en los 4 lados.
+  //
+  // Formato de las etiquetas del eje Y: compacto (fmtK, ya existente en
+  // este archivo) si el texto completo ("$1.404.000") sería demasiado
+  // ancho, completo (fmt, también ya existente) si el rango de valores es
+  // chico y cabe cómodo. Reutiliza fmt/fmtK tal como ya existen — no se
+  // crea ningún formateador nuevo.
+  function formatoEje(v) {
+    var signo = v < 0 ? '−' : '';
+    var abs = Math.abs(v);
+    return signo + (usarEtiquetaCompacta ? fmtK(abs) : ('$' + fmt(abs)));
+  }
+  var maxLabelFull = '$' + fmt(Math.abs(maxVal));
+  var minLabelFull = '$' + fmt(Math.abs(minVal));
+  var usarEtiquetaCompacta = Math.max(maxLabelFull.length, minLabelFull.length) > 8;
+  var PADL = usarEtiquetaCompacta ? 40 : 60;
+  var PADB = 44; // espacio para las etiquetas de fecha del eje X, agregadas en esta revisión
+
+  var stepX = puntos.length > 1 ? (W - PADL - PAD) / (puntos.length - 1) : 0;
+
+  function valToY(v) { return H - PADB - ((v - minVal) / range) * (H - PAD - PADB); }
+  function xFor(i) { return PADL + i * stepX; }
 
   function pathFor(key) {
     return puntos.map(function(p, i){
@@ -1271,19 +1297,45 @@ function rfRenderChart(puntos) {
   // Mismos colores que .rf-kpi-val.pos/.neg — el par pos/neg ya usado para
   // "utilidad" específicamente en este archivo (la tarjeta KPI).
   var UTIL_POS = '#4caf50', UTIL_NEG = '#e05a4e';
+  var SERIE_LABEL = { fact: 'Facturación bruta', neg: 'Ingreso negocio', gastos: 'Gastos', util: 'Utilidad acumulada' };
 
   var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;max-height:260px">';
 
+  // Líneas guía + etiqueta de valor del eje Y en cada una. El valor de
+  // cada línea sale directamente de minVal/maxVal/range ya calculados
+  // arriba — no se recalcula nada por separado.
   for (var g = 0; g <= 4; g++) {
-    var gy = PAD + g * ((H - PAD*2) / 4);
-    svg += '<line x1="' + PAD + '" y1="' + gy.toFixed(1) + '" x2="' + (W-PAD) + '" y2="' + gy.toFixed(1) + '" stroke="var(--border)" stroke-width="1"/>';
+    var gy = PAD + g * ((H - PAD - PADB) / 4);
+    var valorLinea = maxVal - g * (range / 4);
+    svg += '<line x1="' + PADL + '" y1="' + gy.toFixed(1) + '" x2="' + (W-PAD) + '" y2="' + gy.toFixed(1) + '" stroke="var(--border)" stroke-width="1"/>';
+    svg += '<text x="' + (PADL - 8) + '" y="' + (gy + 3).toFixed(1) + '" text-anchor="end" font-size="9" fill="var(--text3)">' + formatoEje(valorLinea) + '</text>';
   }
+
+  // Etiquetas de fecha del eje X. El rango crece durante el mes (hasta
+  // ~26-31 puntos), así que se prueba primero si TODAS caben sin
+  // solaparse (ancho estimado de "dd/mm" ~5 caracteres, con aire) dentro
+  // del ancho real del área de trazado; si no caben, se muestra 1 de cada
+  // N, eligiendo N para que queden ~8-10 etiquetas visibles sin importar
+  // cuántos días tenga el rango. Verificado empíricamente con un dataset
+  // sintético de ~28 puntos (ver verificación de esta revisión), no es un
+  // umbral adivinado.
+  var anchoEtiquetaFecha = 5 * 6; // "dd/mm" ~5 caracteres × ~6 unidades SVG/caracter
+  var espacioMinEtiquetas = anchoEtiquetaFecha + 6;
+  var anchoPlot = W - PADL - PAD;
+  var maxEtiquetasSinSolape = stepX > 0 ? Math.floor(anchoPlot / espacioMinEtiquetas) + 1 : 1;
+  var mostrarTodasFechas = puntos.length <= maxEtiquetasSinSolape;
+  var pasoFechas = mostrarTodasFechas ? 1 : Math.max(1, Math.round(puntos.length / 9));
+  puntos.forEach(function(p, i){
+    if (!mostrarTodasFechas && i % pasoFechas !== 0) return;
+    var diaLbl = p.fecha.slice(8,10) + '/' + p.fecha.slice(5,7);
+    svg += '<text x="' + xFor(i).toFixed(1) + '" y="' + (H - PADB + 14) + '" text-anchor="middle" font-size="9" fill="var(--text3)">' + diaLbl + '</text>';
+  });
 
   // Línea de referencia en utilidad = 0 — el ancla visual: arriba de esta
   // línea es ganancia, abajo es pérdida. minVal nunca es mayor que 0, así
   // que esta línea siempre cae dentro del área visible del gráfico.
   var y0 = valToY(0);
-  svg += '<line x1="' + PAD + '" y1="' + y0.toFixed(1) + '" x2="' + (W-PAD) + '" y2="' + y0.toFixed(1) + '" stroke="#9c9a93" stroke-width="1" stroke-dasharray="4,3"/>';
+  svg += '<line x1="' + PADL + '" y1="' + y0.toFixed(1) + '" x2="' + (W-PAD) + '" y2="' + y0.toFixed(1) + '" stroke="#9c9a93" stroke-width="1" stroke-dasharray="4,3"/>';
 
   series.forEach(function(s){
     svg += '<path d="' + pathFor(s.key) + '" fill="none" stroke="' + s.color + '" stroke-width="2.5"/>';
@@ -1308,6 +1360,24 @@ function rfRenderChart(puntos) {
     }
   }
 
+  // Marcadores por punto en las 4 series — los 3 originales con su color
+  // ya establecido, utilidad con el mismo color por signo ya usado para
+  // sus segmentos (verde si ese punto acumulado es ≥0, rojo si <0; no un
+  // solo color fijo para todos los círculos de utilidad). data-* llevan
+  // lo que necesita el tooltip (Paso 4) — fecha, valor crudo y nombre de
+  // la serie — sin depender de recalcular nada al mostrar el tooltip.
+  series.forEach(function(s){
+    puntos.forEach(function(p, i){
+      svg += '<circle cx="' + xFor(i).toFixed(1) + '" cy="' + valToY(p[s.key]).toFixed(1) + '" r="2.5" fill="' + s.color + '"'
+        + ' data-fecha="' + p.fecha + '" data-valor="' + p[s.key] + '" data-serie="' + SERIE_LABEL[s.key] + '"/>';
+    });
+  });
+  puntos.forEach(function(p, i){
+    var color = p.util >= 0 ? UTIL_POS : UTIL_NEG;
+    svg += '<circle cx="' + xFor(i).toFixed(1) + '" cy="' + valToY(p.util).toFixed(1) + '" r="2.5" fill="' + color + '"'
+      + ' data-fecha="' + p.fecha + '" data-valor="' + p.util + '" data-serie="' + SERIE_LABEL.util + '"/>';
+  });
+
   svg += '</svg>';
 
   var leyendaItems = series.map(function(s){
@@ -1320,6 +1390,77 @@ function rfRenderChart(puntos) {
 
   wrap.innerHTML = svg + leyenda;
 }
+
+// ═══ TOOLTIP DEL GRÁFICO — hover (desktop) y tap (touch) ═══════════════
+// #rfTooltip vive FUERA de #rfChartWrap (el innerHTML de rfChartWrap se
+// reemplaza completo en cada render, así que cualquier cosa puesta dentro
+// no sobreviviría a un refresco). Los listeners se enganchan una sola vez
+// sobre #rfChartWrap (elemento estático, siempre presente) usando
+// delegación de eventos — no hace falta re-engancharlos cada vez que el
+// SVG se re-renderiza.
+var _rfTooltipActivo = null; // el <circle> con tooltip abierto actualmente, o null
+
+function rfEsPuntoDato(el) {
+  return !!el && el.tagName === 'circle' && el.hasAttribute && el.hasAttribute('data-fecha');
+}
+
+function rfMostrarTooltip(circle) {
+  var tt = document.getElementById('rfTooltip');
+  var wrap = document.getElementById('rfChartWrap');
+  if (!tt || !wrap) return;
+  var fecha = circle.getAttribute('data-fecha');
+  var valor = parseFloat(circle.getAttribute('data-valor'));
+  var serie = circle.getAttribute('data-serie');
+  var diaLbl = fecha.slice(8,10) + '/' + fecha.slice(5,7);
+  var valorTxt = (valor < 0 ? '−' : '') + '$' + fmt(Math.abs(valor)); // formato completo, no compacto — precisión
+  tt.innerHTML = '<div class="rf-tt-fecha">' + diaLbl + ' · ' + escHtml(serie) + '</div><div class="rf-tt-valor">' + valorTxt + '</div>';
+
+  var circleRect = circle.getBoundingClientRect();
+  var wrapRect = wrap.getBoundingClientRect();
+  tt.style.left = (circleRect.left - wrapRect.left + circleRect.width / 2) + 'px';
+  tt.style.top = (circleRect.top - wrapRect.top - 8) + 'px';
+  tt.style.transform = 'translate(-50%,-100%)';
+  tt.style.display = 'block';
+  _rfTooltipActivo = circle;
+}
+
+function rfOcultarTooltip() {
+  var tt = document.getElementById('rfTooltip');
+  if (tt) tt.style.display = 'none';
+  _rfTooltipActivo = null;
+}
+
+(function rfInicializarTooltipDelChart(){
+  var wrap = document.getElementById('rfChartWrap');
+  if (!wrap) return;
+  // Hover (desktop): mouseover/mouseout burbujean desde el <circle> hasta
+  // wrap, a diferencia de mouseleave — mismo efecto de "se oculta al
+  // salir del punto" logrado por delegación en vez de un listener por
+  // círculo (los círculos se destruyen y recrean en cada render).
+  wrap.addEventListener('mouseover', function(e){
+    if (rfEsPuntoDato(e.target)) rfMostrarTooltip(e.target);
+  });
+  wrap.addEventListener('mouseout', function(e){
+    if (rfEsPuntoDato(e.target)) rfOcultarTooltip();
+  });
+  // Tap/click (touch y desktop): tocar un punto lo muestra; tocar el
+  // mismo punto de nuevo lo cierra; tocar dentro del gráfico pero fuera
+  // de cualquier punto también lo cierra.
+  wrap.addEventListener('click', function(e){
+    if (rfEsPuntoDato(e.target)) {
+      if (_rfTooltipActivo === e.target) rfOcultarTooltip();
+      else rfMostrarTooltip(e.target);
+      e.stopPropagation();
+    } else {
+      rfOcultarTooltip();
+    }
+  });
+})();
+// Tocar/clickear completamente fuera del gráfico también lo cierra.
+document.addEventListener('click', function(e){
+  var wrap = document.getElementById('rfChartWrap');
+  if (wrap && !wrap.contains(e.target)) rfOcultarTooltip();
+});
 // ═══ URL CONFIG ══════════════════════════════════════════
 function guardarUrl() {
   var val = (document.getElementById('urlInput').value || '').trim();
