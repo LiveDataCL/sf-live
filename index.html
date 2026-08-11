@@ -937,6 +937,16 @@ function fechaHoy() {
 }
 function fmt(n) { return Math.round(n).toLocaleString('es-CL'); }
 function fmtK(n) { return n >= 1000000 ? '$'+(n/1000000).toFixed(1)+'M' : n >= 1000 ? '$'+Math.round(n/1000)+'K' : '$'+Math.round(n); }
+// Bug real, reproducido ejecutando el script real en jsdom (no recalculando
+// a mano): rfRenderDetalleGastos() llamaba a escHtml(), que existe en
+// barberpilot-control/index.html pero nunca se definió en este archivo —
+// ReferenceError sin capturar que abortaba el render antes de poblar
+// rfGastosDetalleBody, dejando la tabla con encabezados pero cero filas.
+// Misma implementación que barberpilot-control, para mantener el mismo
+// comportamiento en ambos repos.
+function escHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 
 // ═══ REPORTE FINANCIERO — anexo mensual, solo mes actual ═══════════════
 // Peer de la vista Resumen, no la reemplaza. Rango siempre dinámico:
