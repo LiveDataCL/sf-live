@@ -1399,12 +1399,22 @@ function rfRenderChart(puntos) {
 // delegación de eventos — no hace falta re-engancharlos cada vez que el
 // SVG se re-renderiza.
 var _rfTooltipActivo = null; // el <circle> con tooltip abierto actualmente, o null
+// Fix: un mouse hover que muestra el tooltip y un click/tap que lo
+// muestra usaban el mismo estado (_rfTooltipActivo), así que un usuario
+// de mouse que hace click sobre un punto que YA está mostrando por hover
+// (sin mover el mouse antes) disparaba la rama de "cerrar" del click,
+// haciendo desaparecer el tooltip de inmediato — confirmado reproduciendo
+// la secuencia mouseover→click sobre el mismo círculo vía jsdom. Este
+// flag distingue cómo se abrió el tooltip actual: el click solo actúa
+// como "cerrar" cuando el tooltip ya estaba abierto por un click/tap
+// anterior sobre ese mismo punto, nunca cuando llegó ahí por hover.
+var _rfTooltipViaClick = false;
 
 function rfEsPuntoDato(el) {
   return !!el && el.tagName === 'circle' && el.hasAttribute && el.hasAttribute('data-fecha');
 }
 
-function rfMostrarTooltip(circle) {
+function rfMostrarTooltip(circle, viaClick) {
   var tt = document.getElementById('rfTooltip');
   var wrap = document.getElementById('rfChartWrap');
   if (!tt || !wrap) return;
@@ -1422,12 +1432,14 @@ function rfMostrarTooltip(circle) {
   tt.style.transform = 'translate(-50%,-100%)';
   tt.style.display = 'block';
   _rfTooltipActivo = circle;
+  _rfTooltipViaClick = !!viaClick;
 }
 
 function rfOcultarTooltip() {
   var tt = document.getElementById('rfTooltip');
   if (tt) tt.style.display = 'none';
   _rfTooltipActivo = null;
+  _rfTooltipViaClick = false;
 }
 
 (function rfInicializarTooltipDelChart(){
@@ -1438,18 +1450,22 @@ function rfOcultarTooltip() {
   // salir del punto" logrado por delegación en vez de un listener por
   // círculo (los círculos se destruyen y recrean en cada render).
   wrap.addEventListener('mouseover', function(e){
-    if (rfEsPuntoDato(e.target)) rfMostrarTooltip(e.target);
+    if (rfEsPuntoDato(e.target)) rfMostrarTooltip(e.target, false);
   });
   wrap.addEventListener('mouseout', function(e){
     if (rfEsPuntoDato(e.target)) rfOcultarTooltip();
   });
   // Tap/click (touch y desktop): tocar un punto lo muestra; tocar el
   // mismo punto de nuevo lo cierra; tocar dentro del gráfico pero fuera
-  // de cualquier punto también lo cierra.
+  // de cualquier punto también lo cierra. Cerrar por click SOLO cuando el
+  // tooltip ya estaba abierto por un click/tap anterior sobre este mismo
+  // punto (_rfTooltipViaClick) — si estaba abierto por hover, el click lo
+  // deja abierto (y pasa a ser "dueño" del estado, así un click siguiente
+  // sobre el mismo punto sí lo cierra).
   wrap.addEventListener('click', function(e){
     if (rfEsPuntoDato(e.target)) {
-      if (_rfTooltipActivo === e.target) rfOcultarTooltip();
-      else rfMostrarTooltip(e.target);
+      if (_rfTooltipActivo === e.target && _rfTooltipViaClick) rfOcultarTooltip();
+      else rfMostrarTooltip(e.target, true);
       e.stopPropagation();
     } else {
       rfOcultarTooltip();
