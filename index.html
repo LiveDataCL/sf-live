@@ -1244,6 +1244,17 @@ function rfRenderChart(puntos) {
   if (!puntos.length) { wrap.innerHTML = '<div class="empty">Sin datos este mes</div>'; return; }
   var W = 720, H = 220, PAD = 32;
 
+  // Legibilidad (medido antes de cambiar nada, ver commit): a 380px de
+  // ancho real de tarjeta (~310px de contenido tras padding), el
+  // font-size=9 anterior rendía solo ~3.9px reales en pantalla — el texto
+  // del eje era ilegible en el teléfono, que es como el dueño revisa esto
+  // en el local. FONT_SIZE_EJE=26 da ~11.2px reales en ese mismo
+  // breakpoint (decisión: priorizar móvil, aceptando que en pantallas
+  // anchas el mismo texto se ve proporcionalmente más grande — no hay
+  // equivalente de "non-scaling-text" en SVG para evitar esa relación).
+  var FONT_SIZE_EJE = 26;
+  var ESCALA_FUENTE = FONT_SIZE_EJE / 9; // reescala los márgenes/anchos que ya existían calibrados para el font-size anterior
+
   // Escala: antes solo tomaba un máximo con mínimo IMPLÍCITO en 0 —
   // correcto mientras las 3 series originales (fact/neg/gastos) son sumas
   // acumuladas que nunca bajan de 0. Utilidad acumulada sí puede ser
@@ -1275,8 +1286,11 @@ function rfRenderChart(puntos) {
   var maxLabelFull = '$' + fmt(Math.abs(maxVal));
   var minLabelFull = '$' + fmt(Math.abs(minVal));
   var usarEtiquetaCompacta = Math.max(maxLabelFull.length, minLabelFull.length) > 8;
-  var PADL = usarEtiquetaCompacta ? 40 : 60;
-  var PADB = 44; // espacio para las etiquetas de fecha del eje X, agregadas en esta revisión
+  // PADL reescalado en proporción al nuevo tamaño de fuente (el ancho de
+  // texto estimado crece linealmente con el font-size, igual criterio que
+  // ya usaba este código, solo con el multiplicador actualizado).
+  var PADL = (usarEtiquetaCompacta ? 40 : 60) * ESCALA_FUENTE;
+  var PADB = 44; // sin cambios — el ascenso/descenso del texto más grande se absorbe ajustando el offset vertical de la etiqueta (ver más abajo), no agrandando este margen
 
   var stepX = puntos.length > 1 ? (W - PADL - PAD) / (puntos.length - 1) : 0;
 
@@ -1299,43 +1313,86 @@ function rfRenderChart(puntos) {
   var UTIL_POS = '#4caf50', UTIL_NEG = '#e05a4e';
   var SERIE_LABEL = { fact: 'Facturación bruta', neg: 'Ingreso negocio', gastos: 'Gastos', util: 'Utilidad acumulada' };
 
-  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;max-height:260px">';
+  // max-height: antes 260px recortaba el ancho real del SVG en viewports
+  // anchos (medido: a 1100px de viewport el alto "natural" a 100% de
+  // ancho es ~310px, por encima del tope de 260px, así que el navegador
+  // reducía el ANCHO para mantener la proporción — el gráfico terminaba
+  // más angosto que su contenedor). 320px da margen hasta ~1080px de
+  // ancho de tarjeta sin recortar, cubriendo los 3 breakpoints medidos.
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;max-height:320px">';
 
   // Líneas guía + etiqueta de valor del eje Y en cada una. El valor de
   // cada línea sale directamente de minVal/maxVal/range ya calculados
-  // arriba — no se recalcula nada por separado.
+  // arriba — no se recalcula nada por separado. vector-effect
+  // "non-scaling-stroke" mantiene el grosor de línea constante en píxeles
+  // reales de pantalla sin importar la escala del viewBox — antes
+  // stroke-width=1 rendía ~0.43px reales en móvil (casi invisible);
+  // fijar el grosor así evita ese problema en cualquier breakpoint sin
+  // tener que elegir un valor de compromiso. Color de las etiquetas
+  // cambiado de --text3 (contraste 2.82:1 sobre fondo blanco — FALLA
+  // WCAG 1.4.3, medido) a --text2 (6.90:1, ya existente en el archivo).
   for (var g = 0; g <= 4; g++) {
     var gy = PAD + g * ((H - PAD - PADB) / 4);
     var valorLinea = maxVal - g * (range / 4);
-    svg += '<line x1="' + PADL + '" y1="' + gy.toFixed(1) + '" x2="' + (W-PAD) + '" y2="' + gy.toFixed(1) + '" stroke="var(--border)" stroke-width="1"/>';
-    svg += '<text x="' + (PADL - 8) + '" y="' + (gy + 3).toFixed(1) + '" text-anchor="end" font-size="9" fill="var(--text3)">' + formatoEje(valorLinea) + '</text>';
+    svg += '<line x1="' + PADL + '" y1="' + gy.toFixed(1) + '" x2="' + (W-PAD) + '" y2="' + gy.toFixed(1) + '" stroke="var(--border)" stroke-width="1.2" vector-effect="non-scaling-stroke"/>';
+    svg += '<text x="' + (PADL - 8) + '" y="' + (gy + FONT_SIZE_EJE*0.333).toFixed(1) + '" text-anchor="end" font-size="' + FONT_SIZE_EJE + '" fill="var(--text2)">' + formatoEje(valorLinea) + '</text>';
   }
 
   // Etiquetas de fecha del eje X. El rango crece durante el mes (hasta
   // ~26-31 puntos), así que se prueba primero si TODAS caben sin
   // solaparse (ancho estimado de "dd/mm" ~5 caracteres, con aire) dentro
   // del ancho real del área de trazado; si no caben, se muestra 1 de cada
-  // N, eligiendo N para que queden ~8-10 etiquetas visibles sin importar
-  // cuántos días tenga el rango. Verificado empíricamente con un dataset
-  // sintético de ~28 puntos (ver verificación de esta revisión), no es un
-  // umbral adivinado.
-  var anchoEtiquetaFecha = 5 * 6; // "dd/mm" ~5 caracteres × ~6 unidades SVG/caracter
-  var espacioMinEtiquetas = anchoEtiquetaFecha + 6;
+  // N. Verificado empíricamente con un dataset sintético de ~28 puntos
+  // (ver verificación de esta revisión).
+  // Ancho estimado por etiqueta reescalado en proporción a ESCALA_FUENTE
+  // (mismo criterio "~6 unidades/carácter" que ya usaba este código,
+  // ajustado al nuevo tamaño de fuente).
+  var anchoEtiquetaFecha = 5 * 6 * ESCALA_FUENTE; // "dd/mm" ~5 caracteres
+  var espacioMinEtiquetas = anchoEtiquetaFecha + 6 * ESCALA_FUENTE;
   var anchoPlot = W - PADL - PAD;
   var maxEtiquetasSinSolape = stepX > 0 ? Math.floor(anchoPlot / espacioMinEtiquetas) + 1 : 1;
   var mostrarTodasFechas = puntos.length <= maxEtiquetasSinSolape;
-  var pasoFechas = mostrarTodasFechas ? 1 : Math.max(1, Math.round(puntos.length / 9));
+  // Bug encontrado y corregido en esta revisión: el paso de adelgazamiento
+  // ANTES se calculaba con un objetivo independiente ("~9 etiquetas
+  // visibles", round(len/9)) que nunca estaba realmente atado a
+  // espacioMinEtiquetas — con el font-size anterior (9) coincidía en no
+  // solaparse, pero con FONT_SIZE_EJE=26 (que necesita mucho más espacio
+  // por etiqueta) esa coincidencia se rompió: verificado con jsdom sobre
+  // un dataset de 28 puntos, el espacio real entre etiquetas mostradas
+  // (63.6 unidades) quedaba por debajo del mínimo necesario (104
+  // unidades) — solape real, no hipotético. Ahora el paso se deriva
+  // directamente de espacioMinEtiquetas: el número mínimo de posiciones a
+  // saltar para garantizar esa separación, en vez de apuntar a una
+  // cantidad de etiquetas fija. Puede mostrar menos de "~8-10" etiquetas
+  // en meses muy largos — es la consecuencia correcta de que el texto más
+  // grande necesita más espacio, no un defecto.
+  var pasoFechas = mostrarTodasFechas ? 1 : Math.max(1, Math.ceil(espacioMinEtiquetas / stepX));
+  // Offset vertical de la etiqueta de fecha: antes "+14" con font-size=9
+  // dejaba ~30 unidades de aire antes del borde del viewBox (H=220),
+  // suficiente para un ascendente/descendente de esa fuente chica. Con
+  // FONT_SIZE_EJE=26 el ascendente del texto (~0.75×font) ya no cabe en
+  // ese aire fijo — escalarlo proporcionalmente (14×ESCALA_FUENTE≈40)
+  // tampoco sirve: empujaría la línea base a y≈216 y el descendente
+  // saldría del viewBox. En vez de eso, el offset se calcula directo a
+  // partir del ascendente estimado de la fuente nueva (0.75×font + 4 de
+  // aire) — verificado por cálculo (no por render real) que el texto
+  // completo (ascendente + descendente) cae dentro de [0, H] y no invade
+  // el área de trazado.
+  var offsetBaseFecha = FONT_SIZE_EJE * 0.75 + 4;
   puntos.forEach(function(p, i){
     if (!mostrarTodasFechas && i % pasoFechas !== 0) return;
     var diaLbl = p.fecha.slice(8,10) + '/' + p.fecha.slice(5,7);
-    svg += '<text x="' + xFor(i).toFixed(1) + '" y="' + (H - PADB + 14) + '" text-anchor="middle" font-size="9" fill="var(--text3)">' + diaLbl + '</text>';
+    svg += '<text x="' + xFor(i).toFixed(1) + '" y="' + (H - PADB + offsetBaseFecha).toFixed(1) + '" text-anchor="middle" font-size="' + FONT_SIZE_EJE + '" fill="var(--text2)">' + diaLbl + '</text>';
   });
 
   // Línea de referencia en utilidad = 0 — el ancla visual: arriba de esta
   // línea es ganancia, abajo es pérdida. minVal nunca es mayor que 0, así
   // que esta línea siempre cae dentro del área visible del gráfico.
+  // Mismo fix de non-scaling-stroke que las líneas guía, y color cambiado
+  // de #9c9a93 (= --text3, mismo problema de contraste medido arriba) a
+  // --text2.
   var y0 = valToY(0);
-  svg += '<line x1="' + PADL + '" y1="' + y0.toFixed(1) + '" x2="' + (W-PAD) + '" y2="' + y0.toFixed(1) + '" stroke="#9c9a93" stroke-width="1" stroke-dasharray="4,3"/>';
+  svg += '<line x1="' + PADL + '" y1="' + y0.toFixed(1) + '" x2="' + (W-PAD) + '" y2="' + y0.toFixed(1) + '" stroke="var(--text2)" stroke-width="1.5" stroke-dasharray="4,3" vector-effect="non-scaling-stroke"/>';
 
   series.forEach(function(s){
     svg += '<path d="' + pathFor(s.key) + '" fill="none" stroke="' + s.color + '" stroke-width="2.5"/>';
