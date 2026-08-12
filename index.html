@@ -1462,15 +1462,27 @@ function rfRenderChart(puntos) {
 
   // Overlay HTML de etiquetas, hermano del <svg> dentro de un contenedor
   // position:relative — position:absolute;inset:0 sobre ese contenedor
-  // hace que el overlay ocupe EXACTAMENTE la misma caja que el <svg> (que
-  // es el único elemento en flujo normal del contenedor, así que su altura
-  // renderizada define la del contenedor). Los <span> se ubican con
-  // left/top en PORCENTAJE de esa caja — coinciden con las coordenadas del
-  // viewBox en cualquier escala — pero su font-size es un px real fijo
-  // (FONT_LABEL_PX), completamente ajeno a la transformación del viewBox:
-  // por eso el texto ya no crece con el ancho de pantalla, a diferencia
-  // del <text> del SVG que reemplaza.
-  var chart = '<div style="position:relative">' + svg
+  // hace que el overlay ocupe la misma caja que el <svg>, EXCEPTO en un
+  // caso real: cuando max-height realmente recorta el <svg> (tarjeta más
+  // ancha que ~1047px, el punto donde 320px de alto ya no alcanza para el
+  // ancho completo), el propio <svg> (elemento reemplazado, con ratio
+  // intrínseco del viewBox) recalcula su ANCHO renderizado hacia abajo
+  // para mantener la proporción — pero este <div> envolvente NO es un
+  // elemento reemplazado: sin una restricción propia, se queda al 100%
+  // del ancho de #rfChartWrap aunque el <svg> adentro sea más angosto.
+  // Bug real, confirmado con datos de producción (dueño del negocio,
+  // 2026-08-11): en ese ancho, el overlay quedaba más ancho que el <svg>
+  // real, así que un porcentaje como "90%" caía más a la derecha en el
+  // overlay que el punto de dato equivalente dentro del <svg> más angosto
+  // — el desfase crecía con cada punto hacia la derecha, exactamente el
+  // patrón reportado. Fix: max-width en este contenedor, igual a
+  // MAX_H*(W/H) — el mismo ancho al que el <svg> se autolimita cuando su
+  // alto llega al tope. Con eso ambos (envolvente y <svg>) llegan
+  // SIEMPRE al mismo ancho renderizado, sin JS adicional ni perder la
+  // fluidez ante resize: por debajo del umbral, width:100% en ambos se
+  // comporta igual que antes; por encima, los dos quedan fijos en el
+  // mismo valor.
+  var chart = '<div style="position:relative;width:100%;max-width:' + (MAX_H * (W / H)).toFixed(2) + 'px">' + svg
     + '<div style="position:absolute;inset:0;pointer-events:none;font-size:' + FONT_LABEL_PX + 'px;color:var(--text2)">'
     + yLabelsHtml + xLabelsHtml + '</div></div>';
 
