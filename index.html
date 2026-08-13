@@ -1242,7 +1242,7 @@ function rfRenderDetalleGastos(gastos) {
 function rfRenderChart(puntos) {
   var wrap = document.getElementById('rfChartWrap');
   if (!puntos.length) { wrap.innerHTML = '<div class="empty">Sin datos este mes</div>'; return; }
-  var W = 720, H = 220, PAD = 32;
+  var W = 720, PAD = 32;
 
   // Bug real, confirmado con capturas de Playwright (no solo matemática de
   // coordenadas): con el texto de eje dibujado DENTRO del <svg> a un
@@ -1278,11 +1278,34 @@ function rfRenderChart(puntos) {
   // confirmar el comportamiento en navegador, el fallback conservador
   // (310px, el ancho móvil real medido) solo entra en juego fuera de un
   // navegador real.
+  // H (alto del viewBox) ya NO es fijo. Bug real reportado por el dueño
+  // del negocio (captura de producción, 2026-08-13, ventana ancha): con
+  // H=220 fijo y el <svg> limitado por CSS a max-height:320px, el ANCHO
+  // renderizado del <svg> dejaba de crecer una vez que el contenedor
+  // superaba MAX_H*(W/H)≈1047px — el gráfico quedaba pegado a un ancho
+  // fijo, con una franja vacía a la derecha que crecía junto con la
+  // ventana, en vez de seguir usando el ancho completo de la tarjeta. Esa
+  // limitación de ancho era un efecto SECUNDARIO no buscado de limitar el
+  // alto — lo único que en verdad se quería evitar (round 7) era un
+  // gráfico excesivamente alto en pantallas anchas.
+  // Fix: en vez de un H fijo + CSS max-height (que acopla ancho y alto a
+  // través de la proporción fija del viewBox), H se calcula para que, al
+  // ancho REAL medido del contenedor, el alto renderizado nunca supere
+  // MAX_H — mientras el ancho SIEMPRE es 100% del contenedor, sin límite
+  // propio. H_BASE=220 es la proporción ya verificada visualmente en
+  // todas las rondas anteriores; H solo se achica por debajo de eso
+  // cuando el contenedor es tan ancho que esa proporción normal excedería
+  // MAX_H de alto real. Con esto, el <svg> nunca es más angosto que su
+  // contenedor — el bug de desalineación overlay-vs-SVG de la ronda
+  // anterior (el <div> envolvente no se achicaba junto con un <svg> más
+  // angosto) queda estructuralmente imposible, no solo parcheado: ya no
+  // hay ningún escenario en el que el <svg> renderice más angosto que el
+  // 100% de su contenedor.
   var MAX_H = 320;
+  var H_BASE = 220;
   var wrapWidthPx = wrap.clientWidth || 310;
-  var naturalHpx = wrapWidthPx * (H / W);
-  var renderedWpx = naturalHpx > MAX_H ? MAX_H * (W / H) : wrapWidthPx;
-  var scaleActual = renderedWpx / W;
+  var H = Math.min(H_BASE, MAX_H * W / wrapWidthPx);
+  var scaleActual = wrapWidthPx / W;
 
   // Escala: antes solo tomaba un máximo con mínimo IMPLÍCITO en 0 —
   // correcto mientras las 3 series originales (fact/neg/gastos) son sumas
@@ -1354,17 +1377,15 @@ function rfRenderChart(puntos) {
   var UTIL_POS = '#4caf50', UTIL_NEG = '#e05a4e';
   var SERIE_LABEL = { fact: 'Facturación bruta', neg: 'Ingreso negocio', gastos: 'Gastos', util: 'Utilidad acumulada' };
 
-  // max-height: 260px recortaba el ancho real del SVG en viewports anchos
-  // (medido: a 1100px de viewport el alto "natural" a 100% de ancho es
-  // ~310px, por encima del tope de 260px, así que el navegador reducía el
-  // ANCHO para mantener la proporción — el gráfico terminaba más angosto
-  // que su contenedor). 320px da margen hasta ~1080px de ancho de tarjeta
-  // sin recortar, cubriendo los 3 breakpoints medidos. display:block quita
-  // el hueco de ~4px bajo el <svg> que dejan los elementos inline — sin
-  // eso, el overlay de etiquetas (posicionado sobre el contenedor
-  // envolvente, ver más abajo) quedaría más alto que la caja real del SVG
-  // y las etiquetas del eje X no coincidirían con el borde inferior real.
-  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;max-height:' + MAX_H + 'px;display:block">';
+  // Sin max-height en CSS: H ya viene calculado arriba para que el alto
+  // renderizado nunca supere MAX_H al ancho real medido, así que width:100%
+  // solo (sin límite propio) alcanza — el <svg> nunca queda más angosto
+  // que su contenedor. display:block quita el hueco de ~4px bajo el <svg>
+  // que dejan los elementos inline — sin eso, el overlay de etiquetas
+  // (posicionado sobre el contenedor envolvente, ver más abajo) quedaría
+  // más alto que la caja real del SVG y las etiquetas del eje X no
+  // coincidirían con el borde inferior real.
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto;display:block">';
 
   // Líneas guía. El valor de cada línea sale directamente de
   // minVal/maxVal/range ya calculados arriba. vector-effect
@@ -1401,7 +1422,15 @@ function rfRenderChart(puntos) {
   var mostrarTodasFechas = puntos.length <= maxEtiquetasSinSolape;
   var pasoFechas = mostrarTodasFechas ? 1 : Math.max(1, Math.ceil(espacioMinEtiquetas / stepX));
   var xLabelsHtml = '';
-  var xLabelTopPct = ((H - PADB + mitadInferiorEtiquetaYPx + aireRealPx) / H * 100).toFixed(2);
+  // Bug real (unidades mezcladas): mitadInferiorEtiquetaYPx y aireRealPx son
+  // px reales, pero se sumaban directo a H/PADB (unidades de viewBox) sin
+  // pasar por scaleActual, igual que sí se hace para construir PADB mismo
+  // un poco más arriba. Con H fijo en 220 el error era chico y no se notaba;
+  // con H ahora variable (más chico en pantallas anchas, ver arriba) ese
+  // mismo error de unidades empuja xLabelTopPct por encima de 100% —
+  // confirmado en captura real a 1920px: la etiqueta de fecha terminaba
+  // debajo del borde inferior del <svg>, superpuesta con la leyenda.
+  var xLabelTopPct = ((H - PADB + (mitadInferiorEtiquetaYPx + aireRealPx) / scaleActual) / H * 100).toFixed(2);
   puntos.forEach(function(p, i){
     if (!mostrarTodasFechas && i % pasoFechas !== 0) return;
     var diaLbl = p.fecha.slice(8,10) + '/' + p.fecha.slice(5,7);
@@ -1462,27 +1491,18 @@ function rfRenderChart(puntos) {
 
   // Overlay HTML de etiquetas, hermano del <svg> dentro de un contenedor
   // position:relative — position:absolute;inset:0 sobre ese contenedor
-  // hace que el overlay ocupe la misma caja que el <svg>, EXCEPTO en un
-  // caso real: cuando max-height realmente recorta el <svg> (tarjeta más
-  // ancha que ~1047px, el punto donde 320px de alto ya no alcanza para el
-  // ancho completo), el propio <svg> (elemento reemplazado, con ratio
-  // intrínseco del viewBox) recalcula su ANCHO renderizado hacia abajo
-  // para mantener la proporción — pero este <div> envolvente NO es un
-  // elemento reemplazado: sin una restricción propia, se queda al 100%
-  // del ancho de #rfChartWrap aunque el <svg> adentro sea más angosto.
-  // Bug real, confirmado con datos de producción (dueño del negocio,
-  // 2026-08-11): en ese ancho, el overlay quedaba más ancho que el <svg>
-  // real, así que un porcentaje como "90%" caía más a la derecha en el
-  // overlay que el punto de dato equivalente dentro del <svg> más angosto
-  // — el desfase crecía con cada punto hacia la derecha, exactamente el
-  // patrón reportado. Fix: max-width en este contenedor, igual a
-  // MAX_H*(W/H) — el mismo ancho al que el <svg> se autolimita cuando su
-  // alto llega al tope. Con eso ambos (envolvente y <svg>) llegan
-  // SIEMPRE al mismo ancho renderizado, sin JS adicional ni perder la
-  // fluidez ante resize: por debajo del umbral, width:100% en ambos se
-  // comporta igual que antes; por encima, los dos quedan fijos en el
-  // mismo valor.
-  var chart = '<div style="position:relative;width:100%;max-width:' + (MAX_H * (W / H)).toFixed(2) + 'px">' + svg
+  // hace que el overlay ocupe EXACTAMENTE la misma caja que el <svg> (que
+  // es el único elemento en flujo normal del contenedor, así que su
+  // altura renderizada define la del contenedor). A diferencia de la
+  // ronda anterior, aquí ya no hace falta un max-width en este <div> para
+  // que coincida con el <svg> — H ahora se calcula (ver más arriba) para
+  // que el <svg> SIEMPRE renderice al 100% del ancho de su contenedor, sin
+  // el caso especial de "más angosto por max-height" que antes obligaba a
+  // replicar ese mismo límite aquí. Los <span> se ubican con left/top en
+  // PORCENTAJE de esa caja — coinciden con las coordenadas del viewBox en
+  // cualquier escala — pero su font-size es un px real fijo
+  // (FONT_LABEL_PX), completamente ajeno a la transformación del viewBox.
+  var chart = '<div style="position:relative">' + svg
     + '<div style="position:absolute;inset:0;pointer-events:none;font-size:' + FONT_LABEL_PX + 'px;color:var(--text2)">'
     + yLabelsHtml + xLabelsHtml + '</div></div>';
 
