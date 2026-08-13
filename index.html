@@ -1368,6 +1368,23 @@ function rfRenderChart(puntos) {
 
   var stepX = puntos.length > 1 ? (W - PADL - PAD) / (puntos.length - 1) : 0;
 
+  // Densidad de puntos: el área de trazado ocupa siempre el mismo ancho
+  // fijo (W-PADL-PAD) sin importar cuántos puntos haya — stepX arriba ya
+  // lo confirma, se reparte ese ancho entre (puntos.length-1) espacios, no
+  // "crece" hacia la derecha con más días. Lo que sí cambia es qué tan
+  // apretados quedan esos espacios: a mitad de mes (~15 puntos) el grosor
+  // de línea/radio de marcador actual (2.5, ya verificado visualmente en
+  // rondas anteriores) sigue viéndose bien; a mes completo (31 puntos,
+  // agosto tiene 31 días) las 4 series (fact/neg/gastos/util) empiezan a
+  // leerse como un solo bloque grueso, sobre todo donde "Ingreso negocio"
+  // y "Utilidad acumulada" ya corren casi pegadas. densidadPuntos pasa de
+  // 0 (≤15 puntos, sin cambios respecto a lo ya verificado) a 1 (31
+  // puntos, el máximo real posible en un mes) y de ahí se interpola el
+  // grosor de línea y el radio de marcador hacia un mínimo aún legible.
+  var densidadPuntos = Math.max(0, Math.min(1, (puntos.length - 15) / (31 - 15)));
+  var STROKE_SERIE = 2.5 - densidadPuntos * (2.5 - 1.4);
+  var RADIO_PUNTO = 2.5 - densidadPuntos * (2.5 - 1.5);
+
   function valToY(v) { return H - PADB - ((v - minVal) / range) * (H - PAD - PADB); }
   function xFor(i) { return PADL + i * stepX; }
 
@@ -1457,7 +1474,7 @@ function rfRenderChart(puntos) {
   svg += '<line x1="' + PADL + '" y1="' + y0.toFixed(1) + '" x2="' + (W-PAD) + '" y2="' + y0.toFixed(1) + '" stroke="var(--text2)" stroke-width="1.5" stroke-dasharray="4,3" vector-effect="non-scaling-stroke"/>';
 
   series.forEach(function(s){
-    svg += '<path d="' + pathFor(s.key) + '" fill="none" stroke="' + s.color + '" stroke-width="2.5"/>';
+    svg += '<path d="' + pathFor(s.key) + '" fill="none" stroke="' + s.color + '" stroke-width="' + STROKE_SERIE.toFixed(2) + '"/>';
   });
 
   // Utilidad acumulada: NO es un solo <path> de un color — cada segmento
@@ -1470,12 +1487,12 @@ function rfRenderChart(puntos) {
     var x0 = xFor(i), x1 = xFor(i+1);
     var yy0 = valToY(v0), yy1 = valToY(v1);
     if ((v0 >= 0) === (v1 >= 0)) {
-      svg += '<line x1="' + x0.toFixed(1) + '" y1="' + yy0.toFixed(1) + '" x2="' + x1.toFixed(1) + '" y2="' + yy1.toFixed(1) + '" stroke="' + (v0 >= 0 ? UTIL_POS : UTIL_NEG) + '" stroke-width="2.5"/>';
+      svg += '<line x1="' + x0.toFixed(1) + '" y1="' + yy0.toFixed(1) + '" x2="' + x1.toFixed(1) + '" y2="' + yy1.toFixed(1) + '" stroke="' + (v0 >= 0 ? UTIL_POS : UTIL_NEG) + '" stroke-width="' + STROKE_SERIE.toFixed(2) + '"/>';
     } else {
       var t = v0 / (v0 - v1); // fracción del segmento donde utilidad cruza 0
       var xc = x0 + t * (x1 - x0);
-      svg += '<line x1="' + x0.toFixed(1) + '" y1="' + yy0.toFixed(1) + '" x2="' + xc.toFixed(1) + '" y2="' + y0.toFixed(1) + '" stroke="' + (v0 >= 0 ? UTIL_POS : UTIL_NEG) + '" stroke-width="2.5"/>';
-      svg += '<line x1="' + xc.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + x1.toFixed(1) + '" y2="' + yy1.toFixed(1) + '" stroke="' + (v1 >= 0 ? UTIL_POS : UTIL_NEG) + '" stroke-width="2.5"/>';
+      svg += '<line x1="' + x0.toFixed(1) + '" y1="' + yy0.toFixed(1) + '" x2="' + xc.toFixed(1) + '" y2="' + y0.toFixed(1) + '" stroke="' + (v0 >= 0 ? UTIL_POS : UTIL_NEG) + '" stroke-width="' + STROKE_SERIE.toFixed(2) + '"/>';
+      svg += '<line x1="' + xc.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + x1.toFixed(1) + '" y2="' + yy1.toFixed(1) + '" stroke="' + (v1 >= 0 ? UTIL_POS : UTIL_NEG) + '" stroke-width="' + STROKE_SERIE.toFixed(2) + '"/>';
     }
   }
 
@@ -1487,13 +1504,13 @@ function rfRenderChart(puntos) {
   // la serie — sin depender de recalcular nada al mostrar el tooltip.
   series.forEach(function(s){
     puntos.forEach(function(p, i){
-      svg += '<circle cx="' + xFor(i).toFixed(1) + '" cy="' + valToY(p[s.key]).toFixed(1) + '" r="2.5" fill="' + s.color + '"'
+      svg += '<circle cx="' + xFor(i).toFixed(1) + '" cy="' + valToY(p[s.key]).toFixed(1) + '" r="' + RADIO_PUNTO.toFixed(2) + '" fill="' + s.color + '"'
         + ' data-fecha="' + p.fecha + '" data-valor="' + p[s.key] + '" data-serie="' + SERIE_LABEL[s.key] + '"/>';
     });
   });
   puntos.forEach(function(p, i){
     var color = p.util >= 0 ? UTIL_POS : UTIL_NEG;
-    svg += '<circle cx="' + xFor(i).toFixed(1) + '" cy="' + valToY(p.util).toFixed(1) + '" r="2.5" fill="' + color + '"'
+    svg += '<circle cx="' + xFor(i).toFixed(1) + '" cy="' + valToY(p.util).toFixed(1) + '" r="' + RADIO_PUNTO.toFixed(2) + '" fill="' + color + '"'
       + ' data-fecha="' + p.fecha + '" data-valor="' + p.util + '" data-serie="' + SERIE_LABEL.util + '"/>';
   });
 
