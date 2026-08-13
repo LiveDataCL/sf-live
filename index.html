@@ -401,7 +401,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   <div id="vistaFinanciero" style="display:none">
     <div class="rf-header">
       <div class="rf-header-top">
-        <span class="rf-title">Reporte Financiero · Mes Actual</span>
+        <span class="rf-title" id="rfTitleMes">Reporte Financiero · Mes Actual</span>
         <span class="rf-period" id="rfPeriodo">—</span>
       </div>
       <div class="rf-kpi-grid" id="rfKpiGrid">
@@ -1075,6 +1075,16 @@ async function cargarReporteFinanciero() {
   rfVerificarAnioFeriados(hoy);
   var desde = rfPrimerDiaMes(hoy);
   document.getElementById('rfPeriodo').textContent = desde + ' → ' + hoy;
+  // Título dinámico: "Mes Actual" fijo no decía a qué mes correspondía el
+  // reporte. hoy ya es la fecha real (America/Santiago) que también define
+  // el rango del período mostrado arriba — se deriva el mes/año directo de
+  // ese mismo string (slice, sin new Date() aparte) para que el título
+  // siempre coincida exactamente con lo que rfPeriodo ya muestra.
+  var mesesRf = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  var tituloMes = document.getElementById('rfTitleMes');
+  if (tituloMes) {
+    tituloMes.textContent = 'Reporte Financiero · ' + mesesRf[parseInt(hoy.slice(5,7),10) - 1] + ' ' + hoy.slice(0,4);
+  }
 
   var regsOk = true, gastosOk = true, regs = [], gastos = [];
 
