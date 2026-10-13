@@ -37,6 +37,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
 .status-text{font-size:11px;opacity:.7}
 /* CONFIGURACIÓN */
 .config-banner{background:var(--warn-soft);border:1px solid rgba(139,94,0,.2);border-radius:var(--rl);padding:16px 20px;margin:20px 24px 0;display:flex;align-items:center;gap:14px}
+.aviso-datos{background:var(--err-soft);border:1px solid rgba(192,57,43,.3);color:var(--err);border-radius:var(--rl);padding:12px 16px;margin:12px 24px 0;font-size:13px;line-height:1.5}
+.aviso-datos .aviso-linea + .aviso-linea{margin-top:6px}
 .config-banner.hidden{display:none}
 .config-input-wrap{flex:1;display:flex;gap:8px}
 .config-input{flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r);font-size:13px;font-family:var(--mono);background:var(--surface)}
@@ -349,6 +351,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   <!-- BANNER PERÍODO (siempre visible al cargar datos) -->
   <div id="bannerPeriodo" style="display:none;background:linear-gradient(135deg,var(--surface) 0%,var(--surface2) 100%);border:1px solid var(--border);border-radius:10px;padding:14px 20px;margin-bottom:14px"></div>
 
+  <!-- AVISO: datos que no se pudieron cargar (nunca se muestran cifras incompletas en silencio) -->
+  <div id="avisoDatos" class="aviso-datos" role="alert" style="display:none"></div>
+
   <!-- ANÁLISIS: CARDS SUPERIORES + HEATMAPS -->
   <div class="analisis-wrap" id="analisisWrap" style="display:none">
     <div class="top-cards" id="topCards"></div>
@@ -477,20 +482,87 @@ var countdown  = INTERVALO;
 var fechaSel   = '';
 // BLOQUE DE NUEVAS FUNCIONES — se insertará en el JS del sf-live
 
-// ─── CARGA DE REGISTROS DETALLADOS (para heatmaps) ───────────────────────────
-function cargarRegistrosDetalle(dias, callback){
-  var promesas = dias.map(function(f){
-    return fetch(API_URL + '/registros/dia?fecha=' + f, {headers:getAuthHeaders()})
-      .then(function(r){ return r.json(); })
-      .catch(function(){ return {ok:false, registros:[]}; });
-  });
-  Promise.all(promesas).then(function(results){
-    var todos = [];
-    results.forEach(function(json){
-      if(json.ok && json.registros) todos = todos.concat(json.registros);
+// ─── CARGA CON REINTENTOS (Stage L) ──────────────────────────────────────────
+// Every report request goes through here. A period is fetched in ONE request
+// (GET /resumen/rango for the totals, GET /registros/rango for the heatmaps)
+// — never one request per day, which used to trip the API's rate limiter and
+// silently drop days from the totals.
+// On 429, 5xx or a network failure it retries, waiting what the API's
+// RateLimit-Reset header says when the browser can read it, otherwise 1 s,
+// 2 s, 4 s. REINTENTOS_MAX is a technical bound (so a report never waits
+// forever), not a business rule. opciones.timeoutMs (optional) aborts an
+// attempt that gets no answer, and that attempt is retried like a network
+// failure. It resolves to {ok:true, json} or {ok:false, motivo} — callers
+// must show the failure, never ignore it. This is the only retry helper in
+// the file (the Reporte Financiero uses it too).
+var REINTENTOS_MAX = 4;
+function _esperaReintento(r, intento){
+  var reset = r ? parseInt(r.headers.get('RateLimit-Reset'), 10) : NaN;
+  if(reset > 0) return reset * 1000;
+  return 1000 * Math.pow(2, intento - 1);
+}
+function fetchConReintentos(url, opciones){
+  var timeoutMs = opciones && opciones.timeoutMs;
+  var intento = 0;
+  function uno(){
+    intento++;
+    var controller = timeoutMs ? new AbortController() : null;
+    var to = controller ? setTimeout(function(){ controller.abort(); }, timeoutMs) : null;
+    return fetch(url, controller ? {headers:getAuthHeaders(), signal:controller.signal} : {headers:getAuthHeaders()}).then(function(r){
+      if(to) clearTimeout(to);
+      if(r.status === 401){ logoutSocio(); return {ok:false, motivo:'tu sesión expiró; vuelve a ingresar'}; }
+      if(r.status === 429 || r.status >= 500){
+        if(intento < REINTENTOS_MAX){
+          setStatus('loading', 'Servidor ocupado — reintentando (' + intento + '/' + (REINTENTOS_MAX - 1) + ')…');
+          return new Promise(function(ok){ setTimeout(ok, _esperaReintento(r, intento)); }).then(uno);
+        }
+        return {ok:false, motivo: r.status === 429 ? 'el servidor rechazó la consulta por exceso de solicitudes' : 'el servidor respondió con un error (' + r.status + ')'};
+      }
+      return r.json().then(function(j){
+        if(r.ok && j && j.ok) return {ok:true, json:j};
+        return {ok:false, motivo:(j && j.detalle) || ('respuesta inesperada del servidor (' + r.status + ')')};
+      }, function(){ return {ok:false, motivo:'respuesta ilegible del servidor'}; });
+    }, function(){
+      if(to) clearTimeout(to);
+      if(intento < REINTENTOS_MAX){
+        return new Promise(function(ok){ setTimeout(ok, _esperaReintento(null, intento)); }).then(uno);
+      }
+      return {ok:false, motivo:'sin conexión con el servidor'};
     });
-    callback(todos);
+  }
+  return uno();
+}
+function _fechaLegible(f){ var p = f.split('-'); return p[2] + '-' + p[1] + '-' + p[0]; }
+function _textoPeriodo(desde, hasta){
+  return desde === hasta ? 'del ' + _fechaLegible(desde) : 'del ' + _fechaLegible(desde) + ' al ' + _fechaLegible(hasta);
+}
+function ocultarAvisoDatos(){
+  var el = document.getElementById('avisoDatos');
+  if(el){ el.style.display = 'none'; el.innerHTML = ''; }
+}
+function _agregarAvisoDatos(texto){
+  var el = document.getElementById('avisoDatos');
+  if(!el) return;
+  el.innerHTML += '<div class="aviso-linea">⚠ ' + texto + '</div>';
+  el.style.display = 'block';
+}
+// Totals unavailable: say which dates are missing and blank every figure,
+// so nothing on screen can be mistaken for a complete period.
+function mostrarTotalesNoDisponibles(desde, hasta, motivo){
+  _agregarAvisoDatos('No se pudieron cargar los datos ' + _textoPeriodo(desde, hasta) + ' (' + motivo + '). '
+    + 'Las cifras no se muestran porque estarían incompletas. Presiona «Actualizar» para reintentar.');
+  var nd = '<div class="empty">Datos no disponibles</div>';
+  ['bbGrid', 'pagoGrid', 'svcList', 'feedList', 'gastosList'].forEach(function(id){
+    var c = document.getElementById(id); if(c) c.innerHTML = nd;
   });
+  var k = document.getElementById('kpiGrid');
+  if(k) k.innerHTML = '<div class="kpi"><div class="kpi-lbl">Totales del período</div><div class="kpi-val">—</div><div class="kpi-sub">No disponibles</div></div>';
+  var b = document.getElementById('bannerPeriodo'); if(b) b.style.display = 'none';
+}
+function mostrarAnalisisNoDisponible(desde, hasta, motivo){
+  _agregarAvisoDatos('No se pudo cargar el análisis por hora y día ' + _textoPeriodo(desde, hasta) + ' (' + motivo + '). '
+    + 'Los gráficos no se muestran porque estarían incompletos.');
+  var w = document.getElementById('analisisWrap'); if(w) w.style.display = 'none';
 }
 
 // ─── PROCESAR REGISTROS → MÉTRICAS PARA HEATMAPS ─────────────────────────────
@@ -1003,30 +1075,6 @@ function rfVerificarAnioFeriados(hoyYMD) {
   }
 }
 
-// fetch con timeout de 4s + 1 reintento. No hay un envoltorio reutilizable
-// exacto en el proyecto para esto — dashboard_kpis_barberia.html (en
-// barberpilot-control) usa un timeout de 4s como constante suelta, sin
-// función reutilizable — así que este helper es nuevo, usando ese mismo
-// valor de 4s como referencia.
-function rfFetchConReintento(url, headers, intentos) {
-  intentos = intentos || 2;
-  return new Promise(function(resolve, reject) {
-    function intentar(restantes) {
-      var controller = new AbortController();
-      var to = setTimeout(function(){ controller.abort(); }, 4000);
-      fetch(url, { headers: headers, signal: controller.signal })
-        .then(function(r){ clearTimeout(to); return r.json(); })
-        .then(resolve)
-        .catch(function(err){
-          clearTimeout(to);
-          if (restantes > 1) intentar(restantes - 1);
-          else reject(err);
-        });
-    }
-    intentar(intentos);
-  });
-}
-
 // Alterna entre la vista Resumen (existente, sin tocar) y el nuevo anexo
 // Reporte Financiero — reutiliza el único patrón de mostrar/ocultar que ya
 // existía en este archivo (login-view/active), no se inventa uno nuevo.
@@ -1088,21 +1136,13 @@ async function cargarReporteFinanciero() {
 
   var regsOk = true, gastosOk = true, regs = [], gastos = [];
 
-  try {
-    var jr = await rfFetchConReintento(API_URL + '/registros/rango?desde=' + desde + '&hasta=' + hoy, getAuthHeaders());
-    if (!jr || jr.ok !== true || !Array.isArray(jr.registros)) throw new Error('respuesta inválida');
-    regs = jr.registros;
-  } catch (e) {
-    regsOk = false;
-  }
+  // Shared retry helper (fetchConReintentos), with this report's existing
+  // 4 s per-attempt timeout.
+  var rr = await fetchConReintentos(API_URL + '/registros/rango?desde=' + desde + '&hasta=' + hoy, {timeoutMs: 4000});
+  if (rr.ok && Array.isArray(rr.json.registros)) regs = rr.json.registros; else regsOk = false;
 
-  try {
-    var jg = await rfFetchConReintento(API_URL + '/gastos/rango?desde=' + desde + '&hasta=' + hoy, getAuthHeaders());
-    if (!jg || jg.ok !== true || !Array.isArray(jg.gastos)) throw new Error('respuesta inválida');
-    gastos = jg.gastos;
-  } catch (e) {
-    gastosOk = false;
-  }
+  var rg = await fetchConReintentos(API_URL + '/gastos/rango?desde=' + desde + '&hasta=' + hoy, {timeoutMs: 4000});
+  if (rg.ok && Array.isArray(rg.json.gastos)) gastos = rg.json.gastos; else gastosOk = false;
 
   var errBanner = document.getElementById('rfErrorBanner');
   var infoBanner = document.getElementById('rfInfoBanner');
@@ -1717,61 +1757,40 @@ function recargarSocios(){
     (periodoSociosActual==='7'?'7':periodoSociosActual==='30'?'30':
      periodoSociosActual==='mes'?'Mes':'Custom')));
 }
+// Loads a period (a single day included): totals from GET /resumen/rango —
+// computed by the API with the same rules as a single day — and heatmaps
+// from GET /registros/rango. Two requests whatever the period's length.
+// Either part that can't be loaded is announced on screen and left blank;
+// nothing partial is ever shown as if it were complete.
 function cargarRangoSocios(desde, hasta, modo){
   document.getElementById('btnRefresh').classList.add('spinning');
-  setStatus('loading', 'Cargando ' + desde + ' → ' + hasta + '…');
-  var dias = [];
-  var cur = new Date(desde + 'T12:00:00');
-  var fin = new Date(hasta  + 'T12:00:00');
-  while(cur <= fin){ dias.push(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()+1); }
-  var promesas = dias.map(function(f){
-    return fetch(API_URL + '/resumen?fecha=' + f, {headers:getAuthHeaders()}).then(function(r){ return r.json(); }).catch(function(){ return {ok:false}; });
+  setStatus('loading', desde === hasta ? 'Actualizando…' : 'Cargando ' + desde + ' → ' + hasta + '…');
+  ocultarAvisoDatos();
+  var q = '?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta);
+  var pTotales = fetchConReintentos(API_URL + '/resumen/rango' + q).then(function(res){
+    if(!res.ok){ mostrarTotalesNoDisponibles(desde, hasta, res.motivo); return false; }
+    renderDatos(res.json.data);
+    renderBannerPeriodo(res.json.data, desde, hasta, modo || 'custom');
+    return true;
   });
-  Promise.all(promesas).then(function(results){
-    var consolidado = {
-      fecha: desde + ' → ' + hasta,
-      servicios: 0, facturacion: 0, pagoBarberos: 0,
-      paraNegocio: 0, gastos: 0, utilidad: 0,
-      porBarbero: {}, porPago: {efectivo:0, debito:0, transferencia:0},
-      porServicio: {}, ultimosRegs: [], listaGastos: []
-    };
-    results.forEach(function(json){
-      if(!json.ok || !json.data) return;
-      var d = json.data;
-      consolidado.servicios    += d.servicios    || 0;
-      consolidado.facturacion  += d.facturacion  || 0;
-      consolidado.pagoBarberos += d.pagoBarberos || 0;
-      consolidado.paraNegocio  += d.paraNegocio  || 0;
-      consolidado.gastos       += d.gastos       || 0;
-      consolidado.utilidad     += d.utilidad     || 0;
-      Object.keys(d.porBarbero||{}).forEach(function(b){
-        if(!consolidado.porBarbero[b]) consolidado.porBarbero[b]={tot:0,bb:0,neg:0,cnt:0};
-        consolidado.porBarbero[b].tot += d.porBarbero[b].tot||0;
-        consolidado.porBarbero[b].bb  += d.porBarbero[b].bb||0;
-        consolidado.porBarbero[b].neg += d.porBarbero[b].neg||0;
-        consolidado.porBarbero[b].cnt += d.porBarbero[b].cnt||0;
-      });
-      Object.keys(d.porPago||{}).forEach(function(p){
-        consolidado.porPago[p] = (consolidado.porPago[p]||0) + (d.porPago[p]||0);
-      });
-      Object.keys(d.porServicio||{}).forEach(function(s){
-        consolidado.porServicio[s] = (consolidado.porServicio[s]||0) + (d.porServicio[s]||0);
-      });
-      if(d.ultimosRegs)  consolidado.ultimosRegs  = consolidado.ultimosRegs.concat(d.ultimosRegs).slice(0,8);
-      if(d.listaGastos)  consolidado.listaGastos  = consolidado.listaGastos.concat(d.listaGastos);
-    });
+  var pAnalisis = fetchConReintentos(API_URL + '/registros/rango' + q).then(function(res){
+    if(!res.ok){ mostrarAnalisisNoDisponible(desde, hasta, res.motivo); return false; }
+    renderAnalisis(procesarRegistros(res.json.registros || []));
+    return true;
+  });
+  return Promise.all([pTotales, pAnalisis]).then(function(ok){
     document.getElementById('btnRefresh').classList.remove('spinning');
-    renderDatos(consolidado);
-    renderBannerPeriodo(consolidado, desde, hasta, modo || 'custom');
-    // Cargar registros detalle para heatmaps (en paralelo, no bloquea el render)
-    cargarRegistrosDetalle(dias, function(registros){
-      var metricas = procesarRegistros(registros);
-      renderAnalisis(metricas);
-    });
-    setStatus('live', '☁ Railway · ' + desde + ' → ' + hasta);
-    var lu = document.getElementById('lastUpdate');
-    if(lu) lu.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    if(ok[0] && ok[1]){
+      setStatus('live', '☁ Railway · ' + (desde === hasta
+        ? new Date().toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'})
+        : desde + ' → ' + hasta));
+      var lu = document.getElementById('lastUpdate');
+      if(lu) lu.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    } else {
+      setStatus('error', 'Datos incompletos ' + _textoPeriodo(desde, hasta) + ' — ver aviso');
+    }
     resetCountdown();
+    return ok[0] && ok[1];
   });
 }
 
@@ -1786,55 +1805,31 @@ function kpiSem(lbl, val, color){
 }
 
 // ═══ CARGA DE DATOS ══════════════════════════════════════
+// The single-day view is the same loader with desde = hasta.
 function cargarDatos(showSpinner) {
-  if (showSpinner) {
-    document.getElementById('btnRefresh').classList.add('spinning');
-    setStatus('loading', 'Actualizando…');
-  }
   var fecha = fechaSel || fechaHoy();
-  var url = API_URL + '/resumen?fecha=' + fecha;
-  fetch(url)
-    .then(function(res) { return res.json(); })
-    .then(function(json) {
-      document.getElementById('btnRefresh').classList.remove('spinning');
-      if (json.ok && json.data) {
-        renderDatos(json.data);
-        var fechaHoy2 = fecha;
-        renderBannerPeriodo(json.data, fechaHoy2, fechaHoy2, 'hoy');
-        // Heatmaps del día
-        cargarRegistrosDetalle([fechaHoy2], function(registros){
-          renderAnalisis(procesarRegistros(registros));
-        });
-        setStatus('live', '☁ Railway · ' + new Date().toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'}));
-        var lu = document.getElementById('lastUpdate');
-        if(lu) lu.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
-        resetCountdown();
-      } else {
-        setStatus('error', 'Sin datos para ' + fecha);
-      }
-    })
-    .catch(function(e) {
-      document.getElementById('btnRefresh').classList.remove('spinning');
-      setStatus('error', 'Sin conexión — reintentando en ' + countdown + 's');
-    });
+  return cargarRangoSocios(fecha, fecha, 'hoy');
 }
 // ═══ RENDER ══════════════════════════════════════════════
 function renderDatos(d) {
+  var variosDias = !!(d.desde && d.hasta && d.desde !== d.hasta);
   renderKPIs(d);
   renderBarberos(d.porBarbero || {});
   renderPagos(d.porPago || {}, d.facturacion);
   renderServicios(d.porServicio || {});
-  renderFeed(d.ultimosRegs || []);
-  renderGastos(d.listaGastos || []);
+  renderFeed(d.ultimosRegs || [], variosDias);
+  renderGastos(d.listaGastos || [], variosDias);
 }
 function renderKPIs(d) {
   var utilClass = d.utilidad >= 0 ? 'ok' : 'err';
+  var variosDias = !!(d.desde && d.hasta && d.desde !== d.hasta);
   document.getElementById('kpiGrid').innerHTML =
     kpi('Servicios', d.servicios, '', d.servicios + ' atendidos') +
     kpi('Facturación', fmtK(d.facturacion), 'warn', '$' + fmt(d.facturacion)) +
     kpi('Pago barberos', fmtK(d.pagoBarberos), 'info', '$' + fmt(d.pagoBarberos)) +
     kpi('Para negocio', fmtK(d.paraNegocio), 'ok', '$' + fmt(d.paraNegocio)) +
-    kpi('Gastos del día', d.gastos > 0 ? '−$' + fmt(d.gastos) : '$0', d.gastos > 0 ? 'err' : '', d.gastos > 0 ? 'registrados hoy' : 'sin gastos') +
+    kpi(variosDias ? 'Gastos del período' : 'Gastos del día', d.gastos > 0 ? '−$' + fmt(d.gastos) : '$0', d.gastos > 0 ? 'err' : '',
+      d.gastos > 0 ? (variosDias ? 'registrados en el período' : 'registrados hoy') : 'sin gastos') +
     kpi('Utilidad neta', fmtK(d.utilidad), utilClass, '$' + fmt(d.utilidad));
 }
 function kpi(lbl, val, cls, sub) {
@@ -1929,13 +1924,19 @@ function renderServicios(porSvc) {
   });
   document.getElementById('svcList').innerHTML = h;
 }
-function renderFeed(regs) {
+// Over a multi-day period the rows can span several dates, so the date is
+// shown with the time.
+function _cuandoTxt(item, variosDias){
+  if(variosDias && item.fecha){ var p = item.fecha.split('-'); return p[2] + '/' + p[1] + ' ' + item.hora; }
+  return item.hora;
+}
+function renderFeed(regs, variosDias) {
   if (!regs || regs.length === 0) { document.getElementById('feedList').innerHTML = '<div class="empty">Sin registros recientes</div>'; return; }
   var h = '';
   regs.forEach(function(r) {
     var badgeCls = r.pago === 'efectivo' ? 'fp-e' : r.pago === 'debito' ? 'fp-d' : 'fp-t';
     h += '<div class="feed-item">'
-      + '<span class="feed-hora">'+r.hora+'</span>'
+      + '<span class="feed-hora">'+_cuandoTxt(r, variosDias)+'</span>'
       + '<span class="feed-barbero">'+r.barbero+'</span>'
       + '<span class="feed-svc">'+r.servicio+'</span>'
       + '<span class="feed-pago-badge '+badgeCls+'">'+r.pago+'</span>'
@@ -1944,12 +1945,12 @@ function renderFeed(regs) {
   });
   document.getElementById('feedList').innerHTML = h;
 }
-function renderGastos(gastos) {
+function renderGastos(gastos, variosDias) {
   if (!gastos || gastos.length === 0) { document.getElementById('gastosList').innerHTML = '<div class="empty">Sin gastos registrados</div>'; return; }
   var h = '';
   gastos.forEach(function(g) {
     h += '<div class="gasto-item">'
-      + '<span class="gasto-hora">'+g.hora+'</span>'
+      + '<span class="gasto-hora">'+_cuandoTxt(g, variosDias)+'</span>'
       + '<span class="gasto-desc">'+g.desc+'</span>'
       + '<span class="gasto-monto">−$'+fmt(g.monto)+'</span>'
       + '</div>';
