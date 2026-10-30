@@ -327,7 +327,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
   <div id="resumenMes" style="display:none;background:linear-gradient(135deg,var(--surface) 0%,var(--surface2) 100%);border:1px solid var(--border);border-radius:10px;padding:14px 20px;margin-bottom:18px;gap:0;flex-wrap:wrap;align-items:stretch">
     <div style="width:100%;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
       <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold)" id="mesLabel">Acumulado mes actual</span>
-      <span style="font-family:var(--mono);font-size:10px;color:var(--text3)" id="mesActualizado"></span>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--text3)"><span id="mesProd"></span><span id="mesActualizado"></span></span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;width:100%">
       <div style="text-align:center;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:6px">
@@ -336,7 +336,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       </div>
       <div style="text-align:center;padding:8px;background:var(--ok-soft);border:1px solid #b8dfc3;border-radius:6px">
         <div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--ok)" id="mesFact">—</div>
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-top:2px">Facturación</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-top:2px">Facturado servicios</div>
       </div>
       <div style="text-align:center;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:6px">
         <div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--text)" id="mesTk">—</div>
@@ -344,7 +344,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       </div>
       <div style="text-align:center;padding:8px;background:var(--gold-soft);border:1px solid rgba(201,168,76,.3);border-radius:6px">
         <div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--gold)" id="mesProy">—</div>
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-top:2px">Proyectado</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-top:2px">Proyección servicios</div>
       </div>
     </div>
   </div>
@@ -649,57 +649,42 @@ function formatFechaMejorDia(fechaStr){
 }
 
 // ─── RENDER BANNER PERÍODO (reemplaza renderBannerSemana) ────────────────────
-function renderBannerPeriodo(data, desde, hasta, modo){
+// proy = the API's projection block (GET /resumen/rango?...&proyeccion=dia|semana|mes|rango). The projection, the weighted days and the
+// share of the monthly goal all come from the server: this page keeps no formula and no 26 / 4.33 constants of its own.
+function renderBannerPeriodo(data, desde, hasta, modo, proy){
   var el = document.getElementById('bannerPeriodo');
   if(!el) return;
 
-  var fact   = data.facturacion || 0;
+  var fact   = data.facturacion || 0;   // total (services + products): only used for the ticket; it is NEVER set against the projection or the goal
   var svc    = data.servicios   || 0;
   var tk     = svc > 0 ? Math.round(fact / svc) : 0;
 
-  // Meta dinámica según el plan de facturación mensual
-  var ahora = new Date();
-  var periodoActual = ahora.getFullYear() + '-' +
-    String(ahora.getMonth()+1).padStart(2,'0');
-  var META_MES = metaPlanParaPeriodo(periodoActual);
-  var meta, metaLabel, diasOp, diasTot, diasRest;
-
-  if(modo === 'hoy'){
-    meta      = Math.round(META_MES / 26); // meta diaria
-    metaLabel = 'meta del día';
-    diasOp    = 1; diasTot = 1; diasRest = 0;
-  } else if(modo === 'semana'){
-    meta      = Math.round(META_MES / 4.33);
-    metaLabel = 'meta semanal';
-    var hoyS  = new Date();
-    var dowS  = hoyS.getDay();
-    diasOp    = Math.min((dowS === 0 ? 6 : dowS - 1) + 1, 6);
-    diasTot   = 6;
-    diasRest  = Math.max(0, diasTot - diasOp);
-  } else if(modo === 'mes'){
-    meta      = META_MES;
-    metaLabel = 'meta mensual';
-    var ahora = new Date();
-    diasOp    = ahora.getDate();
-    diasTot   = new Date(ahora.getFullYear(), ahora.getMonth()+1, 0).getDate();
-    diasRest  = Math.max(0, diasTot - diasOp);
-  } else {
-    // personalizado: calcular días entre desde y hasta
-    var dD = new Date(desde+'T12:00:00'), dH = new Date(hasta+'T12:00:00');
-    diasOp   = Math.round((dH - dD) / 86400000) + 1;
-    diasTot  = diasOp; diasRest = 0;
-    meta     = Math.round(META_MES / 26 * diasOp);
-    metaLabel = 'meta estimada (' + diasOp + ' días)';
+  // Meta del período: meta mensual del plan x la parte del mes que cubre el período (la entrega el servidor, por mes)
+  var P = proy && proy.fracciones_meta ? proy : null;
+  var meta = null;
+  if(P){
+    meta = 0;
+    Object.keys(P.fracciones_meta).forEach(function(m){ meta += metaPlanParaPeriodo(m) * P.fracciones_meta[m]; });
+    meta = Math.round(meta);
   }
+  var metaLabel = modo === 'hoy' ? 'meta del día' : modo === 'semana' ? 'meta semanal' : modo === 'mes' ? 'meta mensual'
+                : 'meta estimada (' + (Math.round((new Date(hasta+'T12:00:00') - new Date(desde+'T12:00:00')) / 86400000) + 1) + ' días)';
+  var hayProy    = !!(P && P.proyeccion !== null && P.proyeccion !== undefined);
+  var jornRest   = hayProy ? P.jornadas_restantes : 0;
+  var jornTrans  = hayProy ? P.jornadas_transcurridas : 0;
+  var fmtJ       = function(x){ return (Math.round(x * 10) / 10).toString().replace('.', ','); };
 
-  var pct   = meta > 0 ? Math.min(100, Math.round(fact / meta * 100)) : 0;
+  // Services and products to date, from the same server block as the projection (services = the basis of the goal and of the projection)
+  var AF       = P && P.a_la_fecha ? P.a_la_fecha : null;
+  var factSvc  = AF ? AF.servicios : null, factProd = AF ? AF.productos : null;
+  var fmtK     = function(x){ return x === null ? '—' : '$' + Math.round(x/1000) + 'K'; };
+
+  var pct   = meta > 0 && factSvc !== null ? Math.min(100, Math.round(factSvc / meta * 100)) : 0;
   var color = pct >= 100 ? 'var(--ok)' : pct >= 70 ? 'var(--gold)' : 'var(--err)';
 
-  // Proyección al final del período
-  var factDia   = diasOp > 0 ? fact / diasOp : 0;
-  var proy      = Math.round(fact + factDia * diasRest);
-  var faltaMeta = Math.max(0, meta - fact);
-  var necesDia  = diasRest > 0 ? Math.round(faltaMeta / diasRest) : 0;
+  var proyVal   = hayProy ? P.proyeccion : null;
+  var faltaMeta = meta > 0 && factSvc !== null ? Math.max(0, meta - factSvc) : 0;
+  var necesDia  = jornRest > 0 ? Math.round(faltaMeta / jornRest) : 0;
 
   // Título dinámico
   var meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
@@ -741,18 +726,19 @@ function renderBannerPeriodo(data, desde, hasta, modo){
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">'
     + '<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold)">' + titulo + '</span>'
     + '<span style="font-family:var(--mono);font-size:10px;color:var(--text3)">'
-    + diasOp + ' día'+(diasOp!==1?'s':'')+' operado'+(diasOp!==1?'s':'')
-    + (diasRest>0 ? ' · ' + diasRest + ' restante'+(diasRest!==1?'s':'') : '') + '</span>'
+    + (hayProy ? fmtJ(jornTrans) + ' jornada'+(fmtJ(jornTrans)!=='1'?'s':'')+' transcurrida'+(fmtJ(jornTrans)!=='1'?'s':'')
+      + (jornRest>0.05 ? ' · ' + fmtJ(jornRest) + ' restante'+(fmtJ(jornRest)!=='1'?'s':'') : '') : 'proyección no disponible') + '</span>'
     + '</div>'
     + barDiasHTML
-    + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">'
-    + kpiSem('Facturado', '$'+Math.round(fact/1000)+'K', 'var(--ok)')
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:12px">'
+    + kpiSem('Facturado servicios', fmtK(factSvc), 'var(--ok)')
+    + kpiSem('Productos a la fecha', fmtK(factProd), 'var(--text)')
     + kpiSem('Servicios', svc.toLocaleString('es-CL'), 'var(--text)')
     + kpiSem('Ticket prom.', '$'+tk.toLocaleString('es-CL'), 'var(--text)')
-    + kpiSem(diasRest>0?'Proyectado':'Total período', '$'+(Math.round(proy/1000))+'K', color)
+    + kpiSem(!hayProy ? 'Proyección servicios' : jornRest>0.05 ? (P.preliminar ? 'Proyección servicios (prelim.)' : 'Proyección servicios') : 'Total período servicios', hayProy ? '$'+(Math.round(proyVal/1000))+'K' : '—', color)
     + '</div>'
     + '<div style="margin-bottom:6px;display:flex;justify-content:space-between;font-size:11px">'
-    + '<span style="color:var(--text2)">Avance vs '+metaLabel+' ($'+Math.round(meta/1000)+'K)</span>'
+    + '<span style="color:var(--text2)">'+(meta === null ? 'Meta no disponible' : 'Avance servicios vs '+metaLabel+' ($'+Math.round(meta/1000)+'K)')+'</span>'
     + '<span style="font-family:var(--mono);font-weight:700;color:'+color+'">'+pct+'%</span>'
     + '</div>'
     + '<div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:'+(necesDia>0?'8':'0')+'px">'
@@ -760,8 +746,8 @@ function renderBannerPeriodo(data, desde, hasta, modo){
     + '</div>'
     + (necesDia > 0
         ? '<div style="font-size:11px;color:var(--text3)">Faltan <strong style="color:var(--text)">$'+faltaMeta.toLocaleString('es-CL')+'</strong>'
-          +' · necesitan <strong style="color:var(--text)">$'+necesDia.toLocaleString('es-CL')+'/día</strong></div>'
-        : '<div style="font-size:11px;color:var(--ok)">✓ Meta alcanzada</div>');
+          +' · necesitan <strong style="color:var(--text)">$'+necesDia.toLocaleString('es-CL')+'/jornada</strong></div>'
+        : (meta > 0 ? '<div style="font-size:11px;color:var(--ok)">✓ Meta alcanzada</div>' : ''));
 }
 
 // ─── RENDER ANÁLISIS (cards superiores + heatmaps) ───────────────────────────
@@ -1694,18 +1680,18 @@ function cargarResumenMes(){
     .then(function(json){
       if(!json.ok || !json.datos) return;
       var datos = json.datos;
-      var svc  = datos.reduce(function(a,r){return a+(r.servicios||0);},0);
-      var fact = datos.reduce(function(a,r){return a+(r.facturado||0);},0);
+      var svc  = datos.reduce(function(a,r){return a+(r.servicios_reales||0);},0);          // services only, like the projection
+      var fact = datos.reduce(function(a,r){return a+(r.facturado_servicios||0);},0);
+      var prod = datos.reduce(function(a,r){return a+(r.facturado_productos||0);},0);
       var tk   = svc>0 ? Math.round(fact/svc) : 0;
-      var hoy  = new Date();
-      var diaHoy  = hoy.getDate();
-      var diasMes = new Date(hoy.getFullYear(),hoy.getMonth()+1,0).getDate();
-      var proy = diaHoy > 0 ? Math.round(fact/diaHoy*diasMes) : 0;
+      var pb = json.proyeccion;   // the server's projection (weighted open days); null when it could not be computed
+      var proy = pb && pb.proyeccion !== null && pb.proyeccion !== undefined ? pb.proyeccion : null;
       var el = function(id){ return document.getElementById(id); };
       if(el('mesSvc'))  el('mesSvc').textContent  = svc.toLocaleString('es-CL');
       if(el('mesFact')) el('mesFact').textContent = '$'+Math.round(fact/1000)+'K';
+      if(el('mesProd')) el('mesProd').textContent = 'Productos a la fecha $'+Math.round(prod/1000)+'K · ';
       if(el('mesTk'))   el('mesTk').textContent   = '$'+tk.toLocaleString('es-CL');
-      if(el('mesProy')) el('mesProy').textContent = '$'+(Math.round(proy/100000)/10).toFixed(1)+'M';
+      if(el('mesProy')) el('mesProy').textContent = proy === null ? '—' : '$'+(Math.round(proy/100000)/10).toFixed(1)+'M' + (pb.preliminar ? ' (prelim.)' : '');
       var rm = document.getElementById('resumenMes');
       if(rm) rm.style.display='flex';
       var ma = document.getElementById('mesActualizado');
@@ -1742,7 +1728,7 @@ function selPeriodoSocios(p, el){
   } else if(p === 'mes'){
     var ahora = new Date();
     var desde2 = ahora.getFullYear()+'-'+String(ahora.getMonth()+1).padStart(2,'0')+'-01';
-    cargarRangoSocios(desde2, fechaHoy());
+    cargarRangoSocios(desde2, fechaHoy(), 'mes');
   }
 }
 function aplicarRangoSocios(){
@@ -1767,10 +1753,11 @@ function cargarRangoSocios(desde, hasta, modo){
   setStatus('loading', desde === hasta ? 'Actualizando…' : 'Cargando ' + desde + ' → ' + hasta + '…');
   ocultarAvisoDatos();
   var q = '?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta);
-  var pTotales = fetchConReintentos(API_URL + '/resumen/rango' + q).then(function(res){
+  var modoProy = modo === 'hoy' ? 'dia' : (modo === 'semana' || modo === 'mes') ? modo : 'rango';
+  var pTotales = fetchConReintentos(API_URL + '/resumen/rango' + q + '&proyeccion=' + modoProy).then(function(res){
     if(!res.ok){ mostrarTotalesNoDisponibles(desde, hasta, res.motivo); return false; }
     renderDatos(res.json.data);
-    renderBannerPeriodo(res.json.data, desde, hasta, modo || 'custom');
+    renderBannerPeriodo(res.json.data, desde, hasta, modo || 'custom', res.json.proyeccion);
     return true;
   });
   var pAnalisis = fetchConReintentos(API_URL + '/registros/rango' + q).then(function(res){
