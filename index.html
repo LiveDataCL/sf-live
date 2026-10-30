@@ -435,7 +435,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       <div class="rf-chart-card" style="overflow-x:auto">
         <div class="chart-title">Detalle de Gastos del Mes</div>
         <table class="rf-table" id="rfGastosDetalle">
-          <thead><tr><th>Fecha</th><th>Hora</th><th style="text-align:left">Descripción</th><th>Monto</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Hora</th><th style="text-align:left">Descripción</th><th>Origen</th><th>Monto</th></tr></thead>
           <tbody id="rfGastosDetalleBody"></tbody>
         </table>
       </div>
@@ -1246,7 +1246,8 @@ function rfRenderTodo(dias, gastos) {
 
   document.getElementById('rfKpiFact').textContent = '$' + fmt(accFact);
   document.getElementById('rfKpiNeg').textContent = '$' + fmt(accNeg);
-  document.getElementById('rfKpiGastos').textContent = '$' + fmt(accGastos);
+  var rfAdm = (gastos || []).filter(function(g){ return g.origen === 'administrativo'; }).reduce(function(a, g){ return a + g.monto; }, 0);
+  document.getElementById('rfKpiGastos').innerHTML = '$' + fmt(accGastos) + '<div style="font-size:11px;font-weight:400;color:var(--text3);margin-top:2px" id="rfKpiGastosDesglose">Caja $' + fmt(accGastos - rfAdm) + ' · Administrativo $' + fmt(rfAdm) + '</div>';   // total of BOTH origins, with the breakdown
   var kpiUtil = document.getElementById('rfKpiUtilidad');
   kpiUtil.textContent = (accUtilA < 0 ? '−' : '') + '$' + fmt(Math.abs(accUtilA));
   kpiUtil.className = 'rf-kpi-val ' + (accUtilA >= 0 ? 'pos' : 'neg');
@@ -1272,10 +1273,11 @@ function rfRenderDetalleGastos(gastos) {
       + '<td>' + diaLbl + '</td>'
       + '<td>' + (g.hora || '—') + '</td>'
       + '<td style="text-align:left;font-family:var(--sans)">' + escHtml(g.desc_gasto || '') + '</td>'
+      + '<td style="font-family:var(--sans)">' + (g.origen === 'administrativo' ? 'Administrativo' : 'Caja') + '</td>'
       + '<td>$' + fmt(g.monto) + '</td>'
       + '</tr>';
   }).join('');
-  body.innerHTML = filas || '<tr><td colspan="4" style="text-align:center;color:var(--text3)">Sin gastos este mes</td></tr>';
+  body.innerHTML = filas || '<tr><td colspan="5" style="text-align:center;color:var(--text3)">Sin gastos este mes</td></tr>';
 }
 
 // Gráfico de línea acumulado, SVG nativo inline — no hay librería de
@@ -1822,8 +1824,8 @@ function renderKPIs(d) {
     kpi('Facturación', fmtK(d.facturacion), 'warn', '$' + fmt(d.facturacion)) +
     kpi('Pago barberos', fmtK(d.pagoBarberos), 'info', '$' + fmt(d.pagoBarberos)) +
     kpi('Para negocio', fmtK(d.paraNegocio), 'ok', '$' + fmt(d.paraNegocio)) +
-    kpi(variosDias ? 'Gastos del período' : 'Gastos del día', d.gastos > 0 ? '−$' + fmt(d.gastos) : '$0', d.gastos > 0 ? 'err' : '',
-      d.gastos > 0 ? (variosDias ? 'registrados en el período' : 'registrados hoy') : 'sin gastos') +
+    kpi(variosDias ? 'Gastos del período (total)' : 'Gastos del día (total)', d.gastos > 0 ? '−$' + fmt(d.gastos) : '$0', d.gastos > 0 ? 'err' : '',
+      d.gastos > 0 ? (d.gastosAdministrativos !== undefined ? 'Caja $' + fmt(d.gastosCaja || 0) + ' · Administrativo $' + fmt(d.gastosAdministrativos || 0) : (variosDias ? 'registrados en el período' : 'registrados hoy')) : 'sin gastos') +
     kpi('Utilidad neta', fmtK(d.utilidad), utilClass, '$' + fmt(d.utilidad));
 }
 function kpi(lbl, val, cls, sub) {
@@ -1945,7 +1947,7 @@ function renderGastos(gastos, variosDias) {
   gastos.forEach(function(g) {
     h += '<div class="gasto-item">'
       + '<span class="gasto-hora">'+_cuandoTxt(g, variosDias)+'</span>'
-      + '<span class="gasto-desc">'+g.desc+'</span>'
+      + '<span class="gasto-desc">'+g.desc+(g.origen === 'administrativo' ? ' <span style="font-size:10px;font-weight:700;color:#7a5200;background:#fdf1d6;border:1px solid #ecd08a;border-radius:9px;padding:1px 6px">Administrativo</span>' : '')+'</span>'
       + '<span class="gasto-monto">−$'+fmt(g.monto)+'</span>'
       + '</div>';
   });
