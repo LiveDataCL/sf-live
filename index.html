@@ -336,7 +336,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:1
       </div>
       <div style="text-align:center;padding:8px;background:var(--ok-soft);border:1px solid #b8dfc3;border-radius:6px">
         <div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--ok)" id="mesFact">—</div>
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-top:2px">Facturado servicios</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-top:2px">Total facturado</div>
       </div>
       <div style="text-align:center;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:6px">
         <div style="font-family:var(--mono);font-size:22px;font-weight:700;color:var(--text)" id="mesTk">—</div>
@@ -678,6 +678,8 @@ function renderBannerPeriodo(data, desde, hasta, modo, proy){
   var AF       = P && P.a_la_fecha ? P.a_la_fecha : null;
   var factSvc  = AF ? AF.servicios : null, factProd = AF ? AF.productos : null;
   var fmtK     = function(x){ return x === null ? '—' : '$' + Math.round(x/1000) + 'K'; };
+  var fmtTot   = function(x){ return x === null ? '—' : '$' + Math.round(x).toLocaleString('es-CL'); };
+  var totalFact = data.facturacion != null ? data.facturacion : null;   // everything that entered the business in the period: services + products
 
   var pct   = meta > 0 && factSvc !== null ? Math.min(100, Math.round(factSvc / meta * 100)) : 0;
   var color = pct >= 100 ? 'var(--ok)' : pct >= 70 ? 'var(--gold)' : 'var(--err)';
@@ -730,9 +732,14 @@ function renderBannerPeriodo(data, desde, hasta, modo, proy){
       + (jornRest>0.05 ? ' · ' + fmtJ(jornRest) + ' restante'+(fmtJ(jornRest)!=='1'?'s':'') : '') : 'proyección no disponible') + '</span>'
     + '</div>'
     + barDiasHTML
+    + '<div id="bannerTotal" style="margin-bottom:12px;padding:12px 14px;background:var(--ok-soft);border:1px solid #b8dfc3;border-radius:8px">'
+    + '<div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3)">Total facturado</div>'
+    + '<div style="font-family:var(--mono);font-size:30px;font-weight:700;color:var(--ok);line-height:1.15" id="bannerTotalVal">' + (totalFact === null ? '—' : fmtTot(totalFact)) + '</div>'
+    + '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:4px;font-size:12px;color:var(--text2)">'
+    + '<span id="bannerSvc" title="Base de la meta y de la proyección">Servicios <b>' + fmtTot(factSvc) + '</b></span>'
+    + '<span id="bannerProd">Productos <b>' + fmtTot(factProd) + '</b></span>'
+    + '</div></div>'
     + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:12px">'
-    + kpiSem('Facturado servicios', fmtK(factSvc), 'var(--ok)')
-    + kpiSem('Productos a la fecha', fmtK(factProd), 'var(--text)')
     + kpiSem('Servicios', svc.toLocaleString('es-CL'), 'var(--text)')
     + kpiSem('Ticket prom.', '$'+tk.toLocaleString('es-CL'), 'var(--text)')
     + kpiSem(!hayProy ? 'Proyección servicios' : jornRest>0.05 ? (P.preliminar ? 'Proyección servicios (prelim.)' : 'Proyección servicios') : 'Total período servicios', hayProy ? '$'+(Math.round(proyVal/1000))+'K' : '—', color)
@@ -1688,8 +1695,8 @@ function cargarResumenMes(){
       var proy = pb && pb.proyeccion !== null && pb.proyeccion !== undefined ? pb.proyeccion : null;
       var el = function(id){ return document.getElementById(id); };
       if(el('mesSvc'))  el('mesSvc').textContent  = svc.toLocaleString('es-CL');
-      if(el('mesFact')) el('mesFact').textContent = '$'+Math.round(fact/1000)+'K';
-      if(el('mesProd')) el('mesProd').textContent = 'Productos a la fecha $'+Math.round(prod/1000)+'K · ';
+      if(el('mesFact')) el('mesFact').textContent = '$'+Math.round((fact+prod)/1000)+'K';   // TOTAL billed (services + products)
+      if(el('mesProd')) el('mesProd').textContent = 'Servicios $'+Math.round(fact/1000)+'K · Productos $'+Math.round(prod/1000)+'K · ';
       if(el('mesTk'))   el('mesTk').textContent   = '$'+tk.toLocaleString('es-CL');
       if(el('mesProy')) el('mesProy').textContent = proy === null ? '—' : '$'+(Math.round(proy/100000)/10).toFixed(1)+'M' + (pb.preliminar ? ' (prelim.)' : '');
       var rm = document.getElementById('resumenMes');
